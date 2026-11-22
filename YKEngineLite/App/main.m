@@ -60,6 +60,10 @@ static NSString *YkJBType(void) {
     return @"有根";
 }
 
+static NSMutableArray *gScripts = nil;
+static NSMutableArray *gRecords = nil;
+static NSMutableArray *gSessions = nil;
+
 static UILabel *YkLabel(NSString *t, CGFloat size, UIFontWeight w, UIColor *c) {
     UILabel *l = [UILabel new];
     l.text = t;
@@ -179,9 +183,6 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UISwitch *_serviceSwitch;
     UILabel *_connTitle;
     UILabel *_connPill;
-    NSMutableArray *_sessions;
-    NSMutableArray *_scripts;
-    NSMutableArray *_records;
 }
 
 - (void)viewDidLoad {
@@ -583,7 +584,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
                 [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
                                                      @"engine": @"reconstructed-inapp",
                                                      @"port": @65324,
-                                                     @"sessionCount": @(_sessions.count) } }];
+                                                     @"sessionCount": @(gSessions.count) } }];
             }];
             // 会话生命周期（对齐原版 /session/create|list|delete）
             [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
@@ -593,29 +594,29 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
                 NSDictionary *sess = @{ @"sessionId": sid, @"state": @"active",
                                         @"name": req.jsonBody[@"name"] ?: @"Mac",
                                         @"createdAt": @([[NSDate date] timeIntervalSince1970]) };
-                if (!_sessions) _sessions = [NSMutableArray array];
-                [_sessions addObject:sess];
+                if (!gSessions) gSessions = [NSMutableArray array];
+                [gSessions addObject:sess];
                 [res respondWithJSON:@{ @"value": sess }];
             }];
             [_srv get:@"/session/list" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [res respondWithJSON:@{ @"value": @{ @"count": @(_sessions.count),
-                                                     @"sessions": _sessions ?: @[] } }];
+                [res respondWithJSON:@{ @"value": @{ @"count": @(gSessions.count),
+                                                     @"sessions": gSessions ?: @[] } }];
             }];
             [_srv delete:@"/session/all" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [_sessions removeAllObjects];
+                [gSessions removeAllObjects];
                 [res respondWithJSON:@{ @"value": @YES }];
             }];
             // 脚本页数据源（对齐原版 /executor/scripts 结构）
             [_srv get:@"/executor/scripts" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [res respondWithJSON:@{ @"value": @{ @"scripts": _scripts ?: @[], @"count": @(_scripts.count) } }];
+                [res respondWithJSON:@{ @"value": @{ @"scripts": gScripts ?: @[], @"count": @(gScripts.count) } }];
             }];
             [_srv post:@"/executor/scripts/save" withBlock:^(RouteRequest *req, RouteResponse *res) {
                 NSDictionary *b = req.jsonBody ?: @{};
-                if (!_scripts) _scripts = [NSMutableArray array];
+                if (!gScripts) gScripts = [NSMutableArray array];
                 NSDictionary *item = @{ @"name": b[@"name"] ?: @"未命名脚本",
                                         @"scriptId": [[NSUUID UUID] UUIDString],
                                         @"createdAt": @([[NSDate date] timeIntervalSince1970]) };
-                [_scripts addObject:item];
+                [gScripts addObject:item];
                 [res respondWithJSON:@{ @"value": item }];
             }];
             [_srv post:@"/executor/run" withBlock:^(RouteRequest *req, RouteResponse *res) {
@@ -625,18 +626,18 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
             }];
             // 录制页数据源（对齐原版 /record/tasks 结构）
             [_srv get:@"/record/tasks" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [res respondWithJSON:@{ @"value": @{ @"tasks": _records ?: @[], @"count": @(_records.count) } }];
+                [res respondWithJSON:@{ @"value": @{ @"tasks": gRecords ?: @[], @"count": @(gRecords.count) } }];
             }];
             [_srv post:@"/record/start" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                if (!_records) _records = [NSMutableArray array];
+                if (!gRecords) gRecords = [NSMutableArray array];
                 NSDictionary *t = @{ @"taskId": [[NSUUID UUID] UUIDString],
                                      @"state": @"recording",
                                      @"startedAt": @([[NSDate date] timeIntervalSince1970]) };
-                [_records addObject:t];
+                [gRecords addObject:t];
                 [res respondWithJSON:@{ @"value": t }];
             }];
             [_srv post:@"/record/stop" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [_records removeAllObjects];
+                [gRecords removeAllObjects];
                 [res respondWithJSON:@{ @"value": @YES }];
             }];
         }
