@@ -80,19 +80,35 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
 #pragma mark - 列表页（脚本 / 录制）
 
-@interface YKListVC : UITableViewController
-@property (nonatomic, copy) NSString *endpoint;     // /executor/scripts 或 /record/tasks
-@property (nonatomic, copy) NSString *rowAction;    // /executor/run 或 /record/start
-@property (nonatomic, copy) NSString *listKey;      // scripts 或 tasks
+@interface YKListVC : UIViewController <UITableViewDataSource, UITableViewDelegate>
+@property (nonatomic, copy) NSString *endpoint;
+@property (nonatomic, copy) NSString *rowAction;
+@property (nonatomic, copy) NSString *listKey;
 @property (nonatomic, strong) NSArray *items;
 @end
 
-@implementation YKListVC
+@implementation YKListVC {
+    UITableView *_table;
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.tableView.backgroundColor = YkPageBg();
-    self.tableView.tableFooterView = [UIView new];
+    self.view.backgroundColor = YkPageBg();
+
+    _table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStylePlain];
+    _table.dataSource = self;
+    _table.delegate = self;
+    _table.backgroundColor = YkPageBg();
+    _table.tableFooterView = [UIView new];
+    _table.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_table];
+    [NSLayoutConstraint activateConstraints:@[
+        [_table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_table.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+    ]];
+
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
         initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(load)];
     if (self.rowAction) {
@@ -102,40 +118,45 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     [self load];
 }
 
-- (NSString *)base { return [NSString stringWithFormat:@"http://127.0.0.1:%u", 65324]; }
+- (NSString *)base { return @"http://127.0.0.1:65324"; }
 
 - (void)load {
-    NSURL *u = [NSURL URLWithString:[self.base stringByAppendingString:self.endpoint]];
+    NSURL *u = [NSURL URLWithString:[self.base stringByAppendingString:self.endpoint ?: @""]];
+    if (!u) return;
     __weak typeof(self) weakSelf = self;
     [[[NSURLSession sharedSession] dataTaskWithURL:u completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
-        NSDictionary *j = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
-        NSArray *list = j[@"value"][self.listKey];
-        if (![list isKindOfClass:[NSArray class]]) list = @[];
+        NSDictionary *j = nil;
+        if (d) j = [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL];
+        id list = j[@"value"][self.listKey];
+        NSArray *arr = [list isKindOfClass:[NSArray class]] ? list : @[];
         dispatch_async(dispatch_get_main_queue(), ^{
-            weakSelf.items = list;
-            [weakSelf.tableView reloadData];
+            weakSelf.items = arr;
+            [weakSelf->_table reloadData];
         });
     }] resume];
 }
 
 - (void)doAction {
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
-        [NSURL URLWithString:[self.base stringByAppendingString:self.rowAction]]];
+    NSString *urlStr = [self.base stringByAppendingString:self.rowAction ?: @""];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
     req.HTTPMethod = @"POST";
     req.HTTPBody = [@"{}" dataUsingEncoding:NSUTF8StringEncoding];
     [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     __weak typeof(self) weakSelf = self;
-    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf load]; });
-    }] resume];
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req
+        completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+            dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf load]; });
+        }] resume];
 }
 
-- (NSInteger)tableView:(UITableView *)tv numberOfRowsInSection:(NSInteger)s { return self.items.count; }
+- (NSInteger)tableView:(UITableView *)tv numberOfRowsInSection:(NSInteger)section {
+    return self.items.count;
+}
 
 - (UITableViewCell *)tableView:(UITableView *)tv cellForRowAtIndexPath:(NSIndexPath *)ip {
     UITableViewCell *c = [tv dequeueReusableCellWithIdentifier:@"c"];
     if (!c) c = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"c"];
-    NSDictionary *it = self.items[ip.row];
+    NSDictionary *it = ip.row < self.items.count ? self.items[ip.row] : @{};
     c.textLabel.text = it[@"name"] ?: it[@"taskId"] ?: @"—";
     c.detailTextLabel.text = it[@"state"] ?: it[@"scriptId"] ?: @"";
     c.detailTextLabel.textColor = YkSub();
@@ -460,11 +481,10 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     for (NSUInteger i = 0; i < tabs.count; i++) {
         BOOL sel = (i == 0);
         UIColor *c = sel ? YkBlue() : YkSub();
-        UIView *col = [UIView new];
+        UIButton *col = [UIButton buttonWithType:UIButtonTypeCustom];
         col.translatesAutoresizingMaskIntoConstraints = NO;
         col.tag = 3100 + i;
-        col.userInteractionEnabled = YES;
-        [col addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tabTapped:)]];
+        [col addTarget:self action:@selector(tabButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
         [bar addSubview:col];
 
         UIImageView *iv = YkIcon(tabs[i][0], 24, c);
@@ -531,8 +551,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     NSLog(@"[YKEngineLite] openScan tapped");
 }
 
-- (void)tabTapped:(UITapGestureRecognizer *)g {
-    NSInteger idx = g.view.tag - 3100;
+- (void)tabButtonTapped:(UIButton *)btn {
+    NSInteger idx = btn.tag - 3100;
     if (idx == 0) { [self.navigationController popToRootViewControllerAnimated:YES]; return; }
     YKListVC *vc = [YKListVC new];
     if (idx == 1) {
