@@ -17,7 +17,7 @@ ykenginelite_FILES = \
 	YKEngineLite/Recovered/YKUIModule.m
 
 ykenginelite_FRAMEWORKS = Foundation UIKit Network Security NetworkExtension
-ykenginelite_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable \
+ykenginelite_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness \
 	-IYKEngineLite/Compat -IYKEngineLite/Recovered
 ykenginelite_LDFLAGS = -fuse-ld=lld
 
