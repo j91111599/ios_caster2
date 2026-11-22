@@ -1,0 +1,54 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Theos
+        uses: actions/cache@v4
+        with:
+          path: ~/theos
+          key: theos-lite-${{ runner.os }}-v1
+
+      - name: Setup Theos
+        run: |
+          set -e
+          if [ ! -d "$HOME/theos/makefiles" ]; then
+            git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          fi
+          if [ ! -d "$HOME/theos/sdks" ] || [ -z "$(ls -A "$HOME/theos/sdks" 2>/dev/null)" ]; then
+            curl -fsSL -o /tmp/sdks.tar.gz https://github.com/theos/sdks/archive/refs/heads/master.tar.gz
+            mkdir -p "$HOME/theos/sdks"
+            tar xzf /tmp/sdks.tar.gz -C /tmp
+            cp -R /tmp/sdks-master/*.sdk "$HOME/theos/sdks/" || true
+          fi
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+          echo "$HOME/theos/bin" >> "$GITHUB_PATH"
+
+      - name: Build (rootless)
+        run: |
+          set -e
+          make clean || true
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 DEBUG=0
+          ls -la packages/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ykenginelite-deb
+          path: packages/*.deb
+          if-no-files-found: error
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/*.deb

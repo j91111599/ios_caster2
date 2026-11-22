@@ -1,0 +1,57 @@
+#import "SSZipArchive.h"
+
+// Lite 实现：优先调用设备上的 zip/unzip CLI（Procursus 自带），否则返回失败并记录原因。
+// 说明：原版使用 SSZipArchive（minizip）；此处只保证接口与行为契约，不重写压缩算法。
+
+@implementation SSZipArchive
+
+static BOOL YKRunTool(NSString *tool, NSArray<NSString *> *args) {
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:tool]) return NO;
+    NSTask *t = [NSTask new];
+    t.launchPath = tool;
+    t.arguments = args;
+    t.standardOutput = [NSPipe pipe];
+    t.standardError = [NSPipe pipe];
+    @try { [t launch]; [t waitUntilExit]; } @catch (NSException *e) { return NO; }
+    return t.terminationStatus == 0;
+}
+
+static NSString *YKFirstExisting(NSArray<NSString *> *paths) {
+    for (NSString *p in paths) if ([[NSFileManager defaultManager] isExecutableFileAtPath:p]) return p;
+    return nil;
+}
+
++ (BOOL)createZipFileAtPath:(NSString *)path withContentsOfDirectory:(NSString *)dir {
+    NSString *zip = YKFirstExisting(@[ @"/var/jb/usr/bin/zip", @"/usr/bin/zip" ]);
+    if (!zip) { NSLog(@"[SSZipArchive] zip 不存在"); return NO; }
+    NSMutableArray *args = [NSMutableArray arrayWithObjects:@"-r", @"-q", path, @".", nil];
+    NSTask *t = [NSTask new];
+    t.launchPath = zip;
+    t.arguments = args;
+    t.currentDirectoryPath = dir;
+    @try { [t launch]; [t waitUntilExit]; } @catch (NSException *e) { return NO; }
+    return t.terminationStatus == 0;
+}
+
++ (BOOL)unzipFileAtPath:(NSString *)path toDestination:(NSString *)destination {
+    NSString *unzip = YKFirstExisting(@[ @"/var/jb/usr/bin/unzip", @"/usr/bin/unzip" ]);
+    if (!unzip) { NSLog(@"[SSZipArchive] unzip 不存在"); return NO; }
+    [[NSFileManager defaultManager] createDirectoryAtPath:destination
+                              withIntermediateDirectories:YES attributes:nil error:NULL];
+    return YKRunTool(unzip, @[ @"-o", @"-q", path, @"-d", destination ]);
+}
+
++ (BOOL)unzipFileAtPath:(NSString *)path toDestination:(NSString *)destination
+     preserveAttributes:(BOOL)preserve overwrite:(BOOL)overwrite nestedZipPath:(NSString *)nested
+               password:(NSString *)password error:(NSError **)error
+      completionHandler:(void (^)(NSString *, BOOL, NSError *))handler {
+    BOOL ok = [self unzipFileAtPath:path toDestination:destination];
+    if (!ok && error) {
+        *error = [NSError errorWithDomain:@"SSZipArchive" code:1
+                                 userInfo:@{NSLocalizedDescriptionKey: @"unzip 失败（可能缺 CLI 或加密）"}];
+    }
+    if (handler) handler(path.lastPathComponent, ok, ok ? nil : (error ? *error : nil));
+    return ok;
+}
+
+@end
