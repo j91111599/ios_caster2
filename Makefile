@@ -20,7 +20,7 @@ include $(THEOS_MAKE_PATH)/tool.mk
 
 # ---------- App（SpringBoard 图标 + 界面 + 进程内引擎）----------
 APPLICATION_NAME = YKEngineApp
-YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngineLite/Compat/YKHTTPServerCompat.m
+YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngineLite/App/YKScriptScreens.m YKEngineLite/Compat/YKHTTPServerCompat.m
 YKEngineApp_FRAMEWORKS = UIKit Foundation Network
 YKEngineApp_CFLAGS = -fobjc-arc -IYKEngineLite/Compat -Wno-unused-const-variable -Wno-unused-function
 YKEngineApp_LDFLAGS = -fuse-ld=lld
