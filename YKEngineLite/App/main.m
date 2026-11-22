@@ -11,6 +11,8 @@
 #import <UIKit/UIKit.h>
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
+@interface YKMainView : UIView
+@end
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import <netinet/in.h>
@@ -188,62 +190,15 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = YkPageBg();
-
-    _scroll = [UIScrollView new];
-    _scroll.translatesAutoresizingMaskIntoConstraints = NO;
-    _scroll.showsVerticalScrollIndicator = NO;
-    [self.view addSubview:_scroll];
-
-    // 状态栏区域铺蓝色（原版蓝底延伸到屏幕顶端）
-    UIView *statusBg = [UIView new];
-    statusBg.translatesAutoresizingMaskIntoConstraints = NO;
-    statusBg.backgroundColor = YkBlue();
-    [self.view addSubview:statusBg];
+    YKMainView *main = [[YKMainView alloc] initWithFrame:self.view.bounds];
+    main.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:main];
     [NSLayoutConstraint activateConstraints:@[
-        [statusBg.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [statusBg.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [statusBg.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [statusBg.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [main.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [main.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [main.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [main.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
     ]];
-
-    _stack = [UIView new];
-    _stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [_scroll addSubview:_stack];
-    _scroll.contentInset = UIEdgeInsetsMake(0, 0, 96.0, 0);
-
-    [NSLayoutConstraint activateConstraints:@[
-        [_scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
-        [_scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [_scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [_scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-(96.0 + 8.0)],
-
-        [_stack.topAnchor constraintEqualToAnchor:_scroll.topAnchor],
-        [_stack.leadingAnchor constraintEqualToAnchor:_scroll.leadingAnchor],
-        [_stack.trailingAnchor constraintEqualToAnchor:_scroll.trailingAnchor],
-        [_stack.bottomAnchor constraintEqualToAnchor:_scroll.bottomAnchor],
-        [_stack.widthAnchor constraintEqualToAnchor:_scroll.widthAnchor],
-    ]];
-
-    UIView *card1 = [self card];
-    UIView *card2 = [self card];
-    [_stack addSubview:card1];
-    [_stack addSubview:card2];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [card1.topAnchor constraintEqualToAnchor:_stack.topAnchor constant:kCardTop],
-        [card1.leadingAnchor constraintEqualToAnchor:_stack.leadingAnchor constant:kGutter],
-        [card1.trailingAnchor constraintEqualToAnchor:_stack.trailingAnchor constant:-kGutter],
-
-        [card2.topAnchor constraintEqualToAnchor:card1.bottomAnchor constant:kGap],
-        [card2.leadingAnchor constraintEqualToAnchor:card1.leadingAnchor],
-        [card2.trailingAnchor constraintEqualToAnchor:card1.trailingAnchor],
-        [card2.bottomAnchor constraintEqualToAnchor:_stack.bottomAnchor constant:-(96.0 + 40.0)],
-    ]];
-
-    [self buildCard1:card1];
-    [self buildCard2:card2];
-    [self buildTabBar];
-
 }
 
 - (UIView *)card {
