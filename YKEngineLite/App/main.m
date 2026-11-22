@@ -10,6 +10,8 @@
 //  元素清单：7 图标 · 18 文本 · 8 圆角 · 5 显隐
 #import <UIKit/UIKit.h>
 #import <signal.h>
+#import <ifaddrs.h>
+#import <arpa/inet.h>
 
 static const CGFloat kGutter  = 12.0;   // 卡片左右外边距
 static const CGFloat kPad     = 16.0;   // 卡片内边距
@@ -26,6 +28,31 @@ static UIColor *YkTintRed(void)   { return [UIColor colorWithRed:0.99 green:0.93
 static UIColor *YkTintPurple(void){ return [UIColor colorWithRed:0.93 green:0.92 blue:0.99 alpha:1]; }
 static UIColor *YkTitle(void)     { return [UIColor colorWithWhite:0.09 alpha:1]; }
 static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]; }
+
+
+// 真实 Wi-Fi 地址（en0）——对应 YKPhoneDevice 的取 IP 逻辑
+static NSString *YkDeviceIP(void) {
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) != 0) return @"—";
+    NSString *ip = nil;
+    for (struct ifaddrs *p = ifa; p; p = p->ifa_next) {
+        if (!p->ifa_addr || p->ifa_addr->sa_family != AF_INET) continue;
+        if (strncmp(p->ifa_name, "en", 2) != 0) continue;
+        char buf[INET_ADDRSTRLEN] = {0};
+        struct sockaddr_in *sin = (struct sockaddr_in *)p->ifa_addr;
+        if (inet_ntop(AF_INET, &sin->sin_addr, buf, sizeof(buf))) { ip = @(buf); break; }
+    }
+    freeifaddrs(ifa);
+    return ip.length ? ip : @"—";
+}
+
+// 越狱形态探测：/.jbroot → 隐根(roothide)，/var/jb → 无根(rootless)，否则 有根
+static NSString *YkJBType(void) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if ([fm fileExistsAtPath:@"/.jbroot"]) return @"隐根";
+    if ([fm fileExistsAtPath:@"/var/jb"]) return @"无根";
+    return @"有根";
+}
 
 static UILabel *YkLabel(NSString *t, CGFloat size, UIFontWeight w, UIColor *c) {
     UILabel *l = [UILabel new];
@@ -62,9 +89,22 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     _scroll.showsVerticalScrollIndicator = NO;
     [self.view addSubview:_scroll];
 
+    // 状态栏区域铺蓝色（原版蓝底延伸到屏幕顶端）
+    UIView *statusBg = [UIView new];
+    statusBg.translatesAutoresizingMaskIntoConstraints = NO;
+    statusBg.backgroundColor = YkBlue();
+    [self.view addSubview:statusBg];
+    [NSLayoutConstraint activateConstraints:@[
+        [statusBg.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [statusBg.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [statusBg.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [statusBg.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+    ]];
+
     _stack = [UIView new];
     _stack.translatesAutoresizingMaskIntoConstraints = NO;
     [_scroll addSubview:_stack];
+    _scroll.contentInset = UIEdgeInsetsMake(0, 0, 96.0, 0);
 
     [NSLayoutConstraint activateConstraints:@[
         [_scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
@@ -198,7 +238,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         [row.topAnchor constraintEqualToAnchor:yAnchor constant:gap],
         [row.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:kGutter],
         [row.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-kGutter],
-        [row.heightAnchor constraintGreaterThanOrEqualToConstant:kRowBase + 34.0],
+        [row.heightAnchor constraintGreaterThanOrEqualToConstant:kBadge + 24.0],
 
         [badge.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:14.0],
         [badge.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
@@ -250,10 +290,10 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     [card addSubview:title];
 
     UIView *t1 = [self statTile:@"wifi" tint:YkBlue() bg:YkTintBlue()
-                        caption:@"设备 IP" value:@"192.168.1.43"];
+                        caption:@"设备 IP" value:YkDeviceIP()];
     UIView *t2 = [self statTile:@"lock.fill"
                            tint:[UIColor colorWithRed:0.90 green:0.35 blue:0.30 alpha:1]
-                             bg:YkTintRed() caption:@"越狱方式" value:@"隐根"];
+                             bg:YkTintRed() caption:@"越狱方式" value:YkJBType()];
     [card addSubview:t1];
     [card addSubview:t2];
 
@@ -386,7 +426,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:root];
     nav.navigationBar.translucent = NO;
     nav.navigationBar.barTintColor = YkBlue();
-    nav.navigationBar.backgroundColor = YkBlue();
+    nav.navigationBar.backgroundColor = [UIColor clearColor];
     [nav.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
     nav.navigationBar.shadowImage = [UIImage new];
     nav.navigationBar.titleTextAttributes = @{ NSForegroundColorAttributeName: [UIColor whiteColor],
