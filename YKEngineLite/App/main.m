@@ -50,9 +50,12 @@ static NSString *YkDeviceIP(void) {
 
 // 越狱形态探测：/.jbroot → 隐根(roothide)，/var/jb → 无根(rootless)，否则 有根
 static NSString *YkJBType(void) {
+    // 沙箱内 / 根路径不可见，先用自身 bundle 路径判断（roothide 特征 .jbroot-XXXX）
+    NSString *bp = [NSBundle mainBundle].bundlePath ?: @"";
+    if ([bp rangeOfString:@".jbroot"].location != NSNotFound) return @"隐根";
     NSFileManager *fm = [NSFileManager defaultManager];
-    if ([fm fileExistsAtPath:@"/.jbroot"]) return @"隐根";
     if ([fm fileExistsAtPath:@"/var/jb"]) return @"无根";
+    if ([fm fileExistsAtPath:@"/.jbroot"]) return @"隐根";
     return @"有根";
 }
 
@@ -134,7 +137,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         [card2.topAnchor constraintEqualToAnchor:card1.bottomAnchor constant:kGap],
         [card2.leadingAnchor constraintEqualToAnchor:card1.leadingAnchor],
         [card2.trailingAnchor constraintEqualToAnchor:card1.trailingAnchor],
-        [card2.bottomAnchor constraintEqualToAnchor:_stack.bottomAnchor constant:-40.0],
+        [card2.bottomAnchor constraintEqualToAnchor:_stack.bottomAnchor constant:-(96.0 + 40.0)],
     ]];
 
     [self buildCard1:card1];
@@ -332,6 +335,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UIImageView *iv = YkIcon(sym, 16, tint);
     UILabel *c = YkLabel(caption, 13, UIFontWeightRegular, YkSub());
     UILabel *v = YkLabel(value, 22, UIFontWeightBold, YkTitle());
+    v.adjustsFontSizeToFitWidth = YES;
+    v.minimumScaleFactor = 0.65;
     [box addSubview:iv];
     [box addSubview:c];
     [box addSubview:v];
@@ -426,9 +431,9 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     YKRootVC *root = [YKRootVC new];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:root];
-    nav.navigationBar.translucent = NO;
+    nav.navigationBar.translucent = YES;
     nav.navigationBar.barTintColor = YkBlue();
-    nav.navigationBar.backgroundColor = [UIColor clearColor];
+    nav.navigationBar.backgroundColor = YkBlue();
     [nav.navigationBar setBackgroundImage:[UIImage new] forBarMetrics:UIBarMetricsDefault];
     nav.navigationBar.shadowImage = [UIImage new];
     nav.navigationBar.titleTextAttributes = @{ NSForegroundColorAttributeName: [UIColor whiteColor],
