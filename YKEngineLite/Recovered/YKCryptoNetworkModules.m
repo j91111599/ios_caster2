@@ -15,6 +15,18 @@
 #import <CommonCrypto/CommonHMAC.h>
 #import <Security/Security.h>
 
+
+// ==== CommonCrypto GCM（SPI，公开头里没有声明，这里显式声明）====
+#ifndef kCCModeGCM
+#define kCCModeGCM 11
+#endif
+extern CCCryptorStatus CCCryptorGCMAddIV(CCCryptorRef cryptorRef, const void *iv, size_t ivLen);
+extern CCCryptorStatus CCCryptorGCMEncrypt(CCCryptorRef cryptorRef, const void *dataIn,
+                                           size_t dataInLength, void *dataOut);
+extern CCCryptorStatus CCCryptorGCMDecrypt(CCCryptorRef cryptorRef, const void *dataIn,
+                                           size_t dataInLength, void *dataOut);
+extern CCCryptorStatus CCCryptorGCMFinal(CCCryptorRef cryptorRef, void *tagOut, size_t *tagLength);
+
 #pragma mark - 通用工具
 
 static NSData *YKDataFromAny(id v, NSString *inputEncoding) {
@@ -261,37 +273,39 @@ static NSDictionary *YKError(NSString *code, NSString *msg) {
         NSData *tag = YKDataFromAny(b[@"tag"], @"base64");
         if (!cipher || tag.length != 16) return YKError(@"invalid argument", @"参数错误: base64 长度不合法");
         CCCryptorRef ctx = NULL;
-        CCCryptorCreateWithMode(kCCDecrypt, kCCModeGCM, kCCAlgorithmAES, ccNoPadding,
-                                iv.bytes, key.bytes, key.length, NULL, 0, 0, 0, &ctx);
+        if (CCCryptorCreateWithMode(kCCDecrypt, kCCModeGCM, kCCAlgorithmAES, ccNoPadding,
+                                    iv.bytes, key.bytes, key.length, NULL, 0, 0, 0, &ctx) != kCCSuccess)
+            return YKError(@"invalid argument", @"GCM 初始化失败");
         CCCryptorGCMAddIV(ctx, iv.bytes, iv.length);
         NSMutableData *plain = [NSMutableData dataWithLength:cipher.length];
-        CCCryptorGCMDecrypt(ctx, cipher.bytes, cipher.length, plain.mutableBytes);
+        CCCryptorStatus ds = CCCryptorGCMDecrypt(ctx, cipher.bytes, cipher.length, plain.mutableBytes);
         size_t tagLen = 16;
-        CCCryptorStatus vs = CCCryptorGCMFinal(ctx, (void *)tag.bytes, &tagLen);
+        CCCryptorStatus fs = CCCryptorGCMFinal(ctx, (void *)tag.bytes, &tagLen);
         CCCryptorRelease(ctx);
-        if (vs != kCCSuccess) return YKError(@"invalid argument", @"GCM 校验失败");
-        return YKValue(@{ @"encoding": @"utf8",
-                          @"data": [[NSString alloc] initWithData:plain encoding:NSUTF8StringEncoding] ?:
-                                   [plain base64EncodedStringWithOptions:0],
+        if (ds != kCCSuccess || fs != kCCSuccess) return YKError(@"invalid argument", @"GCM 校验失败");
+        NSString *txt = [[NSString alloc] initWithData:plain encoding:NSUTF8StringEncoding];
+        return YKValue(@{ @"encoding": txt ? @"utf8" : @"base64",
+                          @"data": txt ?: [plain base64EncodedStringWithOptions:0],
                           @"size": @(plain.length) });
     }
 
     NSData *plain = YKDataFromAny(b[@"plainData"] ?: b[@"data"], b[@"inputEncoding"] ?: @"utf8");
     if (!plain) return YKError(@"invalid argument", @"缺少必填参数: plainData");
     CCCryptorRef ctx = NULL;
-    CCCryptorCreateWithMode(kCCEncrypt, kCCModeGCM, kCCAlgorithmAES, ccNoPadding,
-                            iv.bytes, key.bytes, key.length, NULL, 0, 0, 0, &ctx);
+    if (CCCryptorCreateWithMode(kCCEncrypt, kCCModeGCM, kCCAlgorithmAES, ccNoPadding,
+                                iv.bytes, key.bytes, key.length, NULL, 0, 0, 0, &ctx) != kCCSuccess)
+        return YKError(@"invalid argument", @"GCM 初始化失败");
     CCCryptorGCMAddIV(ctx, iv.bytes, iv.length);
-    size_t outLen = plain.length + 16;
-    NSMutableData *cipher = [NSMutableData dataWithLength:outLen];
-    CCCryptorGCMEncrypt(ctx, plain.bytes, plain.length, cipher.mutableBytes, &outLen);
+    NSMutableData *cipher = [NSMutableData dataWithLength:plain.length];
+    CCCryptorStatus es = CCCryptorGCMEncrypt(ctx, plain.bytes, plain.length, cipher.mutableBytes);
     unsigned char tag[16] = {0};
     size_t tagLen = sizeof(tag);
-    CCCryptorGCMFinal(ctx, tag, &tagLen);
+    CCCryptorStatus fs = CCCryptorGCMFinal(ctx, tag, &tagLen);
     CCCryptorRelease(ctx);
-    cipher.length = outLen;
+    if (es != kCCSuccess || fs != kCCSuccess) return YKError(@"invalid argument", @"GCM 加密失败");
+    NSData *tagData = [NSData dataWithBytes:tag length:tagLen];
     return YKValue(@{ @"tag": @{ @"encoding": @"base64",
-                                @"data": [NSData dataWithBytes:tag length:tagLen].base64EncodedStringWithOptions(0),
+                                @"data": [tagData base64EncodedStringWithOptions:0],
                                 @"size": @(tagLen) },
                       @"cipherData": @{ @"encoding": @"base64",
                                         @"data": [cipher base64EncodedStringWithOptions:0],

@@ -101,7 +101,7 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
         if ([path isEqualToString:@"/session/create"]) {
             NSString *sid = [NSString stringWithFormat:@"sess_%.0f_%@",
                              [[NSDate date] timeIntervalSince1970] * 1000,
-                             [[NSUUID UUID] UUIDString].stringByReplacingOccurrencesOfString:@"-" withString:@""];
+                             [[[NSUUID UUID] UUIDString] stringByReplacingOccurrencesOfString:@"-" withString:@""]];
             return @{ @"value": @{ @"sessionId": sid, @"state": @"active", @"name": @"default" } };
         }
         return @{ @"value": @{ @"state": @"active" } };

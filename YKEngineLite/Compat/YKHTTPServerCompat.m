@@ -211,7 +211,7 @@
         handler = ^(RouteRequest *r, RouteResponse *s) {
             NSString *sid = [NSString stringWithFormat:@"sess_%.0f_%@",
                              [[NSDate date] timeIntervalSince1970] * 1000,
-                             [[NSUUID UUID] UUIDString].stringByReplacingOccurrencesOfString:@"-" withString:@""];
+                             [[[NSUUID UUID] UUIDString] stringByReplacingOccurrencesOfString:@"-" withString:@""]];
             [s respondWithJSON:@{ @"value": @{ @"sessionId": sid, @"state": @"active", @"name": @"default" } }];
         };
     }
