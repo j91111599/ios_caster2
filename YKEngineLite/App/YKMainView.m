@@ -298,8 +298,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
         [_headerView.topAnchor constraintEqualToAnchor:self.topAnchor],
         [_headerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
         [_headerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_headerView.heightAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.topAnchor
-                                                constant:kRowBase],
+        [_headerView.heightAnchor constraintEqualToConstant:88.0],
 
         [_scrollView.topAnchor constraintEqualToAnchor:_headerView.bottomAnchor],
         [_scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
