@@ -78,6 +78,72 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     return iv;
 }
 
+#pragma mark - 列表页（脚本 / 录制）
+
+@interface YKListVC : UITableViewController
+@property (nonatomic, copy) NSString *endpoint;     // /executor/scripts 或 /record/tasks
+@property (nonatomic, copy) NSString *rowAction;    // /executor/run 或 /record/start
+@property (nonatomic, copy) NSString *listKey;      // scripts 或 tasks
+@property (nonatomic, strong) NSArray *items;
+@end
+
+@implementation YKListVC
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.tableView.backgroundColor = YkPageBg();
+    self.tableView.tableFooterView = [UIView new];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+        initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(load)];
+    if (self.rowAction) {
+        self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+            initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(doAction)];
+    }
+    [self load];
+}
+
+- (NSString *)base { return [NSString stringWithFormat:@"http://127.0.0.1:%u", 65324]; }
+
+- (void)load {
+    NSURL *u = [NSURL URLWithString:[self.base stringByAppendingString:self.endpoint]];
+    __weak typeof(self) weakSelf = self;
+    [[[NSURLSession sharedSession] dataTaskWithURL:u completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+        NSDictionary *j = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
+        NSArray *list = j[@"value"][self.listKey];
+        if (![list isKindOfClass:[NSArray class]]) list = @[];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            weakSelf.items = list;
+            [weakSelf.tableView reloadData];
+        });
+    }] resume];
+}
+
+- (void)doAction {
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
+        [NSURL URLWithString:[self.base stringByAppendingString:self.rowAction]]];
+    req.HTTPMethod = @"POST";
+    req.HTTPBody = [@"{}" dataUsingEncoding:NSUTF8StringEncoding];
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    __weak typeof(self) weakSelf = self;
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf load]; });
+    }] resume];
+}
+
+- (NSInteger)tableView:(UITableView *)tv numberOfRowsInSection:(NSInteger)s { return self.items.count; }
+
+- (UITableViewCell *)tableView:(UITableView *)tv cellForRowAtIndexPath:(NSIndexPath *)ip {
+    UITableViewCell *c = [tv dequeueReusableCellWithIdentifier:@"c"];
+    if (!c) c = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"c"];
+    NSDictionary *it = self.items[ip.row];
+    c.textLabel.text = it[@"name"] ?: it[@"taskId"] ?: @"—";
+    c.detailTextLabel.text = it[@"state"] ?: it[@"scriptId"] ?: @"";
+    c.detailTextLabel.textColor = YkSub();
+    return c;
+}
+
+@end
+
 @interface YKRootVC : UIViewController
 @end
 
@@ -91,6 +157,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UILabel *_connTitle;
     UILabel *_connPill;
     NSMutableArray *_sessions;
+    NSMutableArray *_scripts;
+    NSMutableArray *_records;
 }
 
 - (void)viewDidLoad {
@@ -203,6 +271,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UIView *badge = [self badgeWith:@"dot.radiowaves.left.and.right" bg:YkTintBlue() tint:YkBlue() round:YES];
     UILabel *title = YkLabel(@"连接设备", 21, UIFontWeightBold, YkTitle());
     UIView *scan = [self scanButton];
+    scan.userInteractionEnabled = YES;
+    [scan addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openScan)]];
     [card addSubview:badge];
     [card addSubview:title];
     [card addSubview:scan];
@@ -392,6 +462,9 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         UIColor *c = sel ? YkBlue() : YkSub();
         UIView *col = [UIView new];
         col.translatesAutoresizingMaskIntoConstraints = NO;
+        col.tag = 3100 + i;
+        col.userInteractionEnabled = YES;
+        [col addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tabTapped:)]];
         [bar addSubview:col];
 
         UIImageView *iv = YkIcon(tabs[i][0], 24, c);
@@ -454,6 +527,28 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     });
 }
 
+- (void)openScan {
+    NSLog(@"[YKEngineLite] openScan tapped");
+}
+
+- (void)tabTapped:(UITapGestureRecognizer *)g {
+    NSInteger idx = g.view.tag - 3100;
+    if (idx == 0) { [self.navigationController popToRootViewControllerAnimated:YES]; return; }
+    YKListVC *vc = [YKListVC new];
+    if (idx == 1) {
+        vc.title = @"脚本";
+        vc.endpoint = @"/executor/scripts";
+        vc.listKey = @"scripts";
+        vc.rowAction = @"/executor/run";
+    } else {
+        vc.title = @"录制";
+        vc.endpoint = @"/record/tasks";
+        vc.listKey = @"tasks";
+        vc.rowAction = @"/record/start";
+    }
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
 - (void)serviceToggled:(UISwitch *)sw {
     [[NSUserDefaults standardUserDefaults] setBool:sw.isOn forKey:@"ykServiceOn"];
     [[NSUserDefaults standardUserDefaults] synchronize];
@@ -488,11 +583,39 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
                 [_sessions removeAllObjects];
                 [res respondWithJSON:@{ @"value": @YES }];
             }];
+            // 脚本页数据源（对齐原版 /executor/scripts 结构）
             [_srv get:@"/executor/scripts" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [res respondWithJSON:@{ @"value": @{ @"scripts": @[], @"count": @0 } }];
+                [res respondWithJSON:@{ @"value": @{ @"scripts": _scripts ?: @[], @"count": @(_scripts.count) } }];
             }];
+            [_srv post:@"/executor/scripts/save" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                NSDictionary *b = req.jsonBody ?: @{};
+                if (!_scripts) _scripts = [NSMutableArray array];
+                NSDictionary *item = @{ @"name": b[@"name"] ?: @"未命名脚本",
+                                        @"scriptId": [[NSUUID UUID] UUIDString],
+                                        @"createdAt": @([[NSDate date] timeIntervalSince1970]) };
+                [_scripts addObject:item];
+                [res respondWithJSON:@{ @"value": item }];
+            }];
+            [_srv post:@"/executor/run" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                NSString *runId = [[NSUUID UUID] UUIDString];
+                [res respondWithJSON:@{ @"value": @{ @"runId": runId, @"state": @"running",
+                                                     @"startedAt": @([[NSDate date] timeIntervalSince1970]) } }];
+            }];
+            // 录制页数据源（对齐原版 /record/tasks 结构）
             [_srv get:@"/record/tasks" withBlock:^(RouteRequest *req, RouteResponse *res) {
-                [res respondWithJSON:@{ @"value": @{ @"tasks": @[], @"count": @0 } }];
+                [res respondWithJSON:@{ @"value": @{ @"tasks": _records ?: @[], @"count": @(_records.count) } }];
+            }];
+            [_srv post:@"/record/start" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                if (!_records) _records = [NSMutableArray array];
+                NSDictionary *t = @{ @"taskId": [[NSUUID UUID] UUIDString],
+                                     @"state": @"recording",
+                                     @"startedAt": @([[NSDate date] timeIntervalSince1970]) };
+                [_records addObject:t];
+                [res respondWithJSON:@{ @"value": t }];
+            }];
+            [_srv post:@"/record/stop" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                [_records removeAllObjects];
+                [res respondWithJSON:@{ @"value": @YES }];
             }];
         }
         NSError *err = nil;
@@ -542,6 +665,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
 @end
+
 
 @interface YKAppDelegate : UIResponder <UIApplicationDelegate>
 @property (nonatomic, strong) UIWindow *window;
