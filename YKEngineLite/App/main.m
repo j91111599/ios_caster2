@@ -87,6 +87,9 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     HTTPServer *_srv;
     NSTimer *_poller;
     UILabel *_connValue;
+    UISwitch *_serviceSwitch;
+    UILabel *_connTitle;
+    NSMutableArray *_sessions;
 }
 
 - (void)viewDidLoad {
@@ -147,6 +150,11 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     [self buildCard1:card1];
     [self buildCard2:card2];
     [self buildTabBar];
+
+    // 批3：冷启动按上次状态自动开引擎（默认开）
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    BOOL saved = [ud objectForKey:@"ykServiceOn"] ? [ud boolForKey:@"ykServiceOn"] : YES;
+    if (saved && _serviceSwitch.on) [self serviceToggled:_serviceSwitch];
 }
 
 - (UIView *)card {
@@ -239,6 +247,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UIView *badge = [self badgeWith:sym bg:[UIColor colorWithWhite:1 alpha:0.9] tint:YkBlue() round:YES];
     UILabel *t = YkLabel(title, 17, UIFontWeightBold, YkTitle());
     UILabel *s = YkLabel(subtitle, 12, UIFontWeightRegular, YkSub());
+    if (pill.length) { _connTitle = t; _connValue = s; }   // 第三行：未连接设备行
     [row addSubview:badge];
     [row addSubview:t];
     [row addSubview:s];
@@ -280,6 +289,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         UISwitch *sw = [UISwitch new];
         sw.translatesAutoresizingMaskIntoConstraints = NO;
         sw.tag = 2001;   // 服务开关
+        _serviceSwitch = sw;
         sw.on = [[NSUserDefaults standardUserDefaults] objectForKey:@"ykServiceOn"]
                     ? [[NSUserDefaults standardUserDefaults] boolForKey:@"ykServiceOn"] : on;
         sw.onTintColor = YkBlue();
@@ -437,7 +447,28 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
             [_srv get:@"/health" withBlock:^(RouteRequest *req, RouteResponse *res) {
                 [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
                                                      @"engine": @"reconstructed-inapp",
-                                                     @"port": @65324 } }];
+                                                     @"port": @65324,
+                                                     @"sessionCount": @(_sessions.count) } }];
+            }];
+            // 会话生命周期（对齐原版 /session/create|list|delete）
+            [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                NSString *sid = [NSString stringWithFormat:@"sess_%.0f_%@",
+                                 [[NSDate date] timeIntervalSince1970] * 1000,
+                                 [[NSUUID UUID] UUIDString].stringByReplacingOccurrencesOfString:@"-" withString:@""];
+                NSDictionary *sess = @{ @"sessionId": sid, @"state": @"active",
+                                        @"name": req.jsonBody[@"name"] ?: @"Mac",
+                                        @"createdAt": @([[NSDate date] timeIntervalSince1970]) };
+                if (!_sessions) _sessions = [NSMutableArray array];
+                [_sessions addObject:sess];
+                [res respondWithJSON:@{ @"value": sess }];
+            }];
+            [_srv get:@"/session/list" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                [res respondWithJSON:@{ @"value": @{ @"count": @(_sessions.count),
+                                                     @"sessions": _sessions ?: @[] } }];
+            }];
+            [_srv delete:@"/session/all" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                [_sessions removeAllObjects];
+                [res respondWithJSON:@{ @"value": @YES }];
             }];
         }
         NSError *err = nil;
@@ -454,15 +485,26 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
 - (void)startPolling {
     if (_poller) return;
+    __weak typeof(self) weakSelf = self;
     _poller = [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *t) {
-        NSURL *u = [NSURL URLWithString:@"http://127.0.0.1:65324/health"];
+        NSURL *u = [NSURL URLWithString:@"http://127.0.0.1:65324/session/list"];
         [[[NSURLSession sharedSession] dataTaskWithURL:u
             completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
                 NSDictionary *j = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
-                BOOL ready = [j[@"value"][@"ready"] boolValue];
+                NSArray *list = j[@"value"][@"sessions"];
+                if (![list isKindOfClass:[NSArray class]]) list = @[];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    self->_connValue.text = ready ? @"本机 · 已连接" : @"待接入";
-                    self->_connValue.textColor = ready ? YkBlue() : YkSub();
+                    YKRootVC *me = weakSelf; if (!me) return;
+                    if (list.count) {
+                        NSString *name = list.firstObject[@"name"] ?: @"Mac";
+                        me->_connTitle.text = [NSString stringWithFormat:@"%@ · 已连接", name];
+                        me->_connValue.text = @"远程控制中";
+                        me->_connValue.textColor = YkBlue();
+                    } else {
+                        me->_connTitle.text = @"未连接设备";
+                        me->_connValue.text = @"当前暂无电脑接入";
+                        me->_connValue.textColor = YkSub();
+                    }
                 });
             }] resume];
     }];
