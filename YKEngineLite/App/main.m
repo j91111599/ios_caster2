@@ -454,7 +454,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
             [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
                 NSString *sid = [NSString stringWithFormat:@"sess_%.0f_%@",
                                  [[NSDate date] timeIntervalSince1970] * 1000,
-                                 [[NSUUID UUID] UUIDString].stringByReplacingOccurrencesOfString:@"-" withString:@""];
+                                 [[[NSUUID UUID] UUIDString] stringByReplacingOccurrencesOfString:@"-" withString:@""]];
                 NSDictionary *sess = @{ @"sessionId": sid, @"state": @"active",
                                         @"name": req.jsonBody[@"name"] ?: @"Mac",
                                         @"createdAt": @([[NSDate date] timeIntervalSince1970]) };
