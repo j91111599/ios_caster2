@@ -26,7 +26,7 @@ static NSString *YKStringParam(NSDictionary *body, NSDictionary *query, NSString
     return [v isKindOfClass:[NSString class]] ? v : nil;
 }
 
-static NSNumber *YKBoolResult(BOOL b) { return @{ @"value": @(b) }; }
+static NSDictionary *YKBoolResult(BOOL b) { return @{ @"value": @(b) }; }
 static NSDictionary *YKValue(id v) { return @{ @"value": v ?: [NSNull null] }; }
 // 实测错误包封：{"value":{"error","message"}}
 static NSDictionary *YKError(NSString *code, NSString *msg) {
