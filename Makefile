@@ -4,7 +4,7 @@ INSTALL_TARGET_PROCESSES =
 
 include $(THEOS)/makefiles/common.mk
 
-TOOL_NAME = ykenginelite
+# 说明：Recovered/YKHTTPRouter.m 为文档级重建（引用引擎原语 YKOpenApplication 等），\n# 不参与 Lite 编译；其路由契约已由 main.m 的 app 分派覆盖。\nTOOL_NAME = ykenginelite
 
 ykenginelite_FILES = \
 	YKEngineLite/main.m \
@@ -12,8 +12,7 @@ ykenginelite_FILES = \
 	YKEngineLite/Compat/SSZipArchiveCompat.m \
 	YKEngineLite/Recovered/YKCryptoNetworkModules.m \
 	YKEngineLite/Recovered/YKUtilityModules.m \
-	YKEngineLite/Recovered/YKUIModule.m \
-	YKEngineLite/Recovered/YKHTTPRouter.m
+	YKEngineLite/Recovered/YKUIModule.m
 
 ykenginelite_FRAMEWORKS = Foundation UIKit Network Security NetworkExtension
 ykenginelite_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable \
