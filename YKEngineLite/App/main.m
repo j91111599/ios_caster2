@@ -357,13 +357,14 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         [cols addObject:col];
     }
 
+    UIView *c0 = cols[0], *c1 = cols[1], *c2 = cols[2];
     NSMutableArray *cc = [NSMutableArray array];
-    [cc addObject:[cols[0].leadingAnchor constraintEqualToAnchor:bar.leadingAnchor]];
-    [cc addObject:[cols[0].widthAnchor constraintEqualToAnchor:bar.widthAnchor multiplier:1.0 / 3.0]];
-    [cc addObject:[cols[1].leadingAnchor constraintEqualToAnchor:cols[0].trailingAnchor]];
-    [cc addObject:[cols[1].widthAnchor constraintEqualToAnchor:cols[0].widthAnchor]];
-    [cc addObject:[cols[2].leadingAnchor constraintEqualToAnchor:cols[1].trailingAnchor]];
-    [cc addObject:[cols[2].widthAnchor constraintEqualToAnchor:cols[0].widthAnchor]];
+    [cc addObject:[c0.leadingAnchor constraintEqualToAnchor:bar.leadingAnchor]];
+    [cc addObject:[c0.widthAnchor constraintEqualToAnchor:bar.widthAnchor multiplier:1.0 / 3.0]];
+    [cc addObject:[c1.leadingAnchor constraintEqualToAnchor:c0.trailingAnchor]];
+    [cc addObject:[c1.widthAnchor constraintEqualToAnchor:c0.widthAnchor]];
+    [cc addObject:[c2.leadingAnchor constraintEqualToAnchor:c1.trailingAnchor]];
+    [cc addObject:[c2.widthAnchor constraintEqualToAnchor:c0.widthAnchor]];
     for (UIView *col in cols) {
         [cc addObject:[col.topAnchor constraintEqualToAnchor:bar.topAnchor]];
         [cc addObject:[col.heightAnchor constraintEqualToConstant:70.0]];
