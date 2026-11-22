@@ -527,6 +527,49 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     [self.navigationController pushViewController:vc animated:YES];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self startEngineIfNeeded];
+}
+
+- (void)startEngineIfNeeded {
+    if (_srv) return;
+    _srv = [HTTPServer new];
+    _srv.port = 65324;
+    _srv.interface = @"loopback";
+    __weak typeof(self) weakSelf = self;
+    [_srv get:@"/health" withBlock:^(RouteRequest *req, RouteResponse *res) {
+        [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
+                                             @"engine": @"reconstructed-inapp",
+                                             @"port": @65324,
+                                             @"sessionCount": @(gSessions.count) } }];
+    }];
+    [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
+        NSString *sid = [NSString stringWithFormat:@"sess_%.0f_%@",
+                         [[NSDate date] timeIntervalSince1970] * 1000,
+                         [[[NSUUID UUID] UUIDString] stringByReplacingOccurrencesOfString:@"-" withString:@""]];
+        NSDictionary *sess = @{ @"sessionId": sid, @"state": @"active",
+                                @"name": req.jsonBody[@"name"] ?: @"Mac",
+                                @"createdAt": @([[NSDate date] timeIntervalSince1970]) };
+        if (!gSessions) gSessions = [NSMutableArray array];
+        [gSessions addObject:sess];
+        [res respondWithJSON:@{ @"value": sess }];
+    }];
+    [_srv get:@"/session/list" withBlock:^(RouteRequest *req, RouteResponse *res) {
+        [res respondWithJSON:@{ @"value": @{ @"count": @(gSessions.count), @"sessions": gSessions ?: @[] } }];
+    }];
+    [_srv get:@"/executor/scripts" withBlock:^(RouteRequest *req, RouteResponse *res) {
+        [res respondWithJSON:@{ @"value": @{ @"scripts": gScripts ?: @[], @"count": @(gScripts.count) } }];
+    }];
+    [_srv get:@"/record/tasks" withBlock:^(RouteRequest *req, RouteResponse *res) {
+        [res respondWithJSON:@{ @"value": @{ @"tasks": gRecords ?: @[], @"count": @(gRecords.count) } }];
+    }];
+    NSError *err = nil;
+    BOOL ok = [_srv start:&err];
+    NSLog(@"[YKEngineLite] in-app engine start=%d err=%@", ok, err);
+    (void)weakSelf;
+}
+
 - (void)serviceToggled:(UISwitch *)sw {
     [[NSUserDefaults standardUserDefaults] setBool:sw.isOn forKey:@"ykServiceOn"];
     [[NSUserDefaults standardUserDefaults] synchronize];
