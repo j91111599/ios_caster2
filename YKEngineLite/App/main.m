@@ -130,8 +130,10 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         id list = j[@"value"][self.listKey];
         NSArray *arr = [list isKindOfClass:[NSArray class]] ? list : @[];
         dispatch_async(dispatch_get_main_queue(), ^{
-            weakSelf.items = arr;
-            [weakSelf->_table reloadData];
+            YKListVC *strong = weakSelf;
+            if (!strong) return;
+            strong.items = arr;
+            [strong->_table reloadData];
         });
     }] resume];
 }
