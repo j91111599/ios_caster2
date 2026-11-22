@@ -19,15 +19,14 @@ jobs:
 
       - name: Install build deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld libplist-2.0-4 libssl3 zstd fakeroot dpkg-dev curl git make
-          # Procursus 版 ldid（Linux 可执行）
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang lld llvm libplist-2.0-4 libssl3 zstd fakeroot dpkg-dev curl git make
           sudo curl -fsSL -o /usr/local/bin/ldid \
             https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_linux_x86_64
           sudo chmod +x /usr/local/bin/ldid
-          ldid -h 2>&1 | head -2 || true
+          clang --version | head -2
 
-      - name: Setup Theos
+      - name: Setup Theos + toolchain shim
         run: |
           set -e
           export THEOS=$RUNNER_TEMP/theos
@@ -36,18 +35,23 @@ jobs:
           curl -fsSL -o /tmp/sdks.tar.gz https://github.com/theos/sdks/archive/refs/heads/master.tar.gz
           tar xzf /tmp/sdks.tar.gz -C /tmp
           cp -R /tmp/sdks-master/*.sdk "$THEOS/sdks/" || true
+          # Linux 上让 theos 用系统 clang/lld
+          TC="$THEOS/toolchain/linux/iphone/bin"
+          mkdir -p "$TC"
+          ln -sf "$(which clang)" "$TC/clang"
+          ln -sf "$(which clang++)" "$TC/clang++"
+          ln -sf "$(which ld.lld)" "$TC/ld" || true
+          ls -la "$TC"
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
           echo "$THEOS/bin" >> "$GITHUB_PATH"
-          ls "$THEOS/sdks" | head -5
+          ls "$THEOS/sdks" | head -3
 
       - name: Build (rootless)
         run: |
-          set -e
+          set -euo pipefail
           make clean || true
-          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 DEBUG=0 \
-               TARGET=iphone:clang:latest:14.0 2>&1 | tail -40
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 DEBUG=0 2>&1 | tail -60
           ls -la packages/ || true
-          find . -name "*.deb" -maxdepth 3
 
       - name: Upload artifact
         if: always()
@@ -60,9 +64,8 @@ jobs:
       - name: Publish deb back to repo
         if: success()
         run: |
-          set -e
           mkdir -p dist
-          cp packages/*.deb dist/ 2>/dev/null || echo "no deb"
+          cp packages/*.deb dist/ 2>/dev/null || echo "no deb produced"
           ls -la dist/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
