@@ -25,7 +25,8 @@ YKEngineApp_FRAMEWORKS = UIKit Foundation
 YKEngineApp_CFLAGS = -fobjc-arc
 YKEngineApp_LDFLAGS = -fuse-ld=lld
 YKEngineApp_INSTALL_PATH = /Applications
-YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources
+YKEngineApp_INFO_PLIST = YKEngineLite/App/Info.plist
+YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources/AppIcon60x60@2x.png
 include $(THEOS_MAKE_PATH)/application.mk
 
 after-install::
