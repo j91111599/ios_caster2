@@ -115,7 +115,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         [_scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
         [_scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [_scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [_scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-96.0],
+        [_scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-(96.0 + 8.0)],
 
         [_stack.topAnchor constraintEqualToAnchor:_scroll.topAnchor],
         [_stack.leadingAnchor constraintEqualToAnchor:_scroll.leadingAnchor],
@@ -275,8 +275,11 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     } else {
         UISwitch *sw = [UISwitch new];
         sw.translatesAutoresizingMaskIntoConstraints = NO;
-        sw.on = on;
+        sw.tag = 2001;   // 服务开关
+        sw.on = [[NSUserDefaults standardUserDefaults] objectForKey:@"ykServiceOn"]
+                    ? [[NSUserDefaults standardUserDefaults] boolForKey:@"ykServiceOn"] : on;
         sw.onTintColor = YkBlue();
+        [sw addTarget:self action:@selector(serviceToggled:) forControlEvents:UIControlEventValueChanged];
         [row addSubview:sw];
         [c addObjectsFromArray:@[
             [sw.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14.0],
@@ -417,6 +420,12 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         [cc addObject:[col.heightAnchor constraintEqualToConstant:70.0]];
     }
     [NSLayoutConstraint activateConstraints:cc];
+}
+
+- (void)serviceToggled:(UISwitch *)sw {
+    [[NSUserDefaults standardUserDefaults] setBool:sw.isOn forKey:@"ykServiceOn"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    NSLog(@"[YKEngineLite] service toggled -> %@", sw.isOn ? @"ON" : @"OFF");
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
