@@ -12,6 +12,8 @@
 #import <signal.h>
 #import <ifaddrs.h>
 #import <arpa/inet.h>
+#import <netinet/in.h>
+#import <string.h>
 
 static const CGFloat kGutter  = 12.0;   // 卡片左右外边距
 static const CGFloat kPad     = 16.0;   // 卡片内边距
