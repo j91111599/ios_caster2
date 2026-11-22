@@ -392,7 +392,7 @@ static NSString *const YKPrefsNamespaceKey = @"namespace";   // [推断] 多命�
                       @"size": @{ @"width": @(px.width * scale), @"height": @(px.height * scale) },
                       @"scale": @(scale),
                       @"dpi": @(scale >= 3 ? 458 : (scale >= 2 ? 326 : 163)),
-                      @"orientation": @((int)[UIDevice currentDevice].orientation),
+                      @"orientation": @(1)   /* 实测 portrait = 1 */[UIDevice currentDevice].orientation),
                       @"orientationName": @"portrait" });    // 实测值域替换为真实朝向
 }
 

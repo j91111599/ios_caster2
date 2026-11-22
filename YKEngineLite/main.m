@@ -221,17 +221,16 @@ int main(int argc, char *argv[]) {
                              @"archive", @"internal", @"wda", @"executor", @"session"];
         for (NSString *m in modules) {
             [server post:[NSString stringWithFormat:@"/%@/*", m] withBlock:^(RouteRequest *req, RouteResponse *res) {
-                NSDictionary *out = YKDispatch(req.method, req.path, [req jsonBody] ?: req.query ?: @{},
+                NSDictionary *out = YKDispatch(req.method, req.path, [req jsonBody] ?: @{},
                                                req.query, NULL);
-                if (out[@"value.error"]) {
-                    res.statusCode = 400;
-                    [res respondWithJSON:out];
-                } else {
-                    [res respondWithJSON:out];
-                }
+                id inner = out[@"value"];
+                if ([inner isKindOfClass:[NSDictionary class]] && inner[@"error"]) res.statusCode = 400;
+                [res respondWithJSON:out];
             }];
             [server get:[NSString stringWithFormat:@"/%@/*", m] withBlock:^(RouteRequest *req, RouteResponse *res) {
                 NSDictionary *out = YKDispatch(req.method, req.path, @{}, req.query, NULL);
+                id inner = out[@"value"];
+                if ([inner isKindOfClass:[NSDictionary class]] && inner[@"error"]) res.statusCode = 400;
                 [res respondWithJSON:out];
             }];
         }
@@ -246,6 +245,10 @@ int main(int argc, char *argv[]) {
         }];
         [server setDefaultHandler:^(RouteRequest *req, RouteResponse *res) {
             NSDictionary *out = YKDispatch(req.method, req.path, [req jsonBody] ?: @{}, req.query, NULL);
+            id inner = out[@"value"];
+            if ([inner isKindOfClass:[NSDictionary class]] && inner[@"error"]) {
+                res.statusCode = [inner[@"error"] isEqualToString:@"not_found"] ? 404 : 400;
+            }
             [res respondWithJSON:out];
         }];
 
