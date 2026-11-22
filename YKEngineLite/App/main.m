@@ -89,6 +89,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UILabel *_connValue;
     UISwitch *_serviceSwitch;
     UILabel *_connTitle;
+    UILabel *_connPill;
     NSMutableArray *_sessions;
 }
 
@@ -243,7 +244,11 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UIView *badge = [self badgeWith:sym bg:[UIColor colorWithWhite:1 alpha:0.9] tint:YkBlue() round:YES];
     UILabel *t = YkLabel(title, 17, UIFontWeightBold, YkTitle());
     UILabel *s = YkLabel(subtitle, 12, UIFontWeightRegular, YkSub());
-    if (pill.length) { _connTitle = t; _connValue = s; }   // 第三行：未连接设备行
+    if (pill.length) {
+        _connTitle = t; _connValue = s;
+        t.adjustsFontSizeToFitWidth = YES;
+        t.minimumScaleFactor = 0.75;
+    }
     [row addSubview:badge];
     [row addSubview:t];
     [row addSubview:s];
@@ -270,6 +275,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
     if (pill.length) {
         UILabel *p = YkLabel(pill, 13, UIFontWeightSemibold, YkSub());
+        _connPill = p;
         p.textAlignment = NSTextAlignmentCenter;
         p.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1];
         p.layer.cornerRadius = 17.0;
@@ -512,10 +518,16 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
                         me->_connTitle.text = [NSString stringWithFormat:@"%@ · 已连接", name];
                         me->_connValue.text = @"远程控制中";
                         me->_connValue.textColor = YkBlue();
+                        me->_connPill.text = @"已连接";
+                        me->_connPill.textColor = YkBlue();
+                        me->_connPill.backgroundColor = YkTintBlue();
                     } else {
                         me->_connTitle.text = @"未连接设备";
                         me->_connValue.text = @"当前暂无电脑接入";
                         me->_connValue.textColor = YkSub();
+                        me->_connPill.text = @"待接入";
+                        me->_connPill.textColor = YkSub();
+                        me->_connPill.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1];
                     }
                 });
             }] resume];
