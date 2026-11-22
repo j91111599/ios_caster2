@@ -120,7 +120,7 @@ static NSDictionary *YKError(NSString *code, NSString *msg) {
     return d ? YKValue([d base64EncodedStringWithOptions:0]) : YKError(@"invalid argument", @"缺少必填参数: data");
 }
 + (NSDictionary *)base64Decode:(NSDictionary *)b {
-    id src = b[@"base64"] ?: b[@"data"];
+    id src = b[@"base64"];   // 实测：只认 base64，不接受 data
     if (!src) return YKError(@"invalid argument", @"缺少必填参数: base64 (Base64 文本)");
     NSData *d = YKDataFromAny(src, @"base64");
     return d ? YKValue(YKEncodeData(d, b[@"outputEncoding"] ?: @"utf8"))
@@ -131,20 +131,20 @@ static NSDictionary *YKError(NSString *code, NSString *msg) {
     return d ? YKValue(YKEncodeData(d, @"hex")) : YKError(@"invalid argument", @"缺少必填参数: data");
 }
 + (NSDictionary *)hexDecode:(NSDictionary *)b {
-    id src = b[@"hex"] ?: b[@"data"];
+    id src = b[@"hex"];      // 实测：只认 hex
     if (!src) return YKError(@"invalid argument", @"缺少必填参数: hex (十六进制文本)");
     NSData *d = YKDataFromAny(src, @"hex");
     return d ? YKValue(YKEncodeData(d, b[@"outputEncoding"] ?: @"utf8"))
              : YKError(@"invalid argument", @"参数错误: hex 长度不合法");
 }
 + (NSDictionary *)urlEncode:(NSDictionary *)b {
-    NSString *t = [b[@"text"] ?: b[@"data"] description];
+    NSString *t = [b[@"text"] description];   // 实测：只认 text
     if (!t.length) return YKError(@"invalid argument", @"缺少必填参数: text (URL 原始文本)");
     return YKValue([t stringByAddingPercentEncodingWithAllowedCharacters:
                     [NSCharacterSet URLQueryAllowedCharacterSet]] ?: t);
 }
 + (NSDictionary *)urlDecode:(NSDictionary *)b {
-    NSString *t = [b[@"text"] ?: b[@"data"] description];
+    NSString *t = [b[@"text"] description];   // 实测：只认 text
     if (!t.length) return YKError(@"invalid argument", @"缺少必填参数: text (URL 编码文本)");
     return YKValue([t stringByRemovingPercentEncoding] ?: t);
 }

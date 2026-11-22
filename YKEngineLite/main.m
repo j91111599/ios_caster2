@@ -150,8 +150,21 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
         return YKNotPorted(@"plist");
     }
 
-    // ---- 屏幕 ----
-    if ([head isEqualToString:@"screen"]) return [YKScreenModule info];
+    // ---- 屏幕（按 verb 分派，对齐实测：info/size/scale/dpi/width/height/orientation）----
+    if ([head isEqualToString:@"screen"]) {
+        NSString *verb = s.count > 1 ? s[1] : @"info";
+        NSDictionary *info = [YKScreenModule info];
+        NSDictionary *v = info[@"value"] ?: info;
+        if ([verb isEqualToString:@"info"] || [verb isEqualToString:@"all"]) return info;
+        if ([verb isEqualToString:@"size"]) return @{ @"value": @{ @"width": v[@"width"] ?: @0,
+                                                                    @"height": v[@"height"] ?: @0 } };
+        if ([verb isEqualToString:@"width"]) return @{ @"value": v[@"width"] ?: @0 };
+        if ([verb isEqualToString:@"height"]) return @{ @"value": v[@"height"] ?: @0 };
+        if ([verb isEqualToString:@"scale"]) return @{ @"value": v[@"scale"] ?: @1 };
+        if ([verb isEqualToString:@"dpi"]) return @{ @"value": v[@"dpi"] ?: @163 };
+        if ([verb isEqualToString:@"orientation"]) return @{ @"value": v[@"orientation"] ?: @0 };
+        return info;
+    }
 
     // ---- 加密 ----
     if ([head isEqualToString:@"crypto"]) {
