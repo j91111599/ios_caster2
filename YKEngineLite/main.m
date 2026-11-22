@@ -9,6 +9,7 @@
 //
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <signal.h>
 #import "YKHTTPServerCompat.h"
 
 // 模块入口（来自 Recovered/*.m）
