@@ -1,4 +1,6 @@
 TARGET := iphone:clang:latest:14.0
+THEOS_PACKAGE_ARCH = iphoneos-arm64e
+THEOS_PACKAGE_FILENAME = com.yk.enginelite_$(THEOS_PACKAGE_VERSION)_iphoneos-arm64e.deb
 ARCHS = arm64
 INSTALL_TARGET_PROCESSES =
 

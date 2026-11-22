@@ -1,10 +1,9 @@
 Package: com.yk.enginelite
 Name: YK 重建引擎（Lite）
-Version: 0.1.0
-Architecture: iphoneos-arm64
+Version: 0.2.0
+Architecture: iphoneos-arm64e
 Maintainer: YK RE Project <noreply@localhost>
 Author: YK RE Project
 Section: 开发
 Priority: optional
-Description: 由二进制重建的 HTTP 引擎（文件/偏好/plist/屏幕/加密/UI/路由层），监听 127.0.0.1:65323
-Depends: firmware (>= 14.0)
+Description: 由二进制重建的 HTTP 引擎 + 四屏 UI（主屏/脚本/设置/安装弹层），监听 127.0.0.1:65324
