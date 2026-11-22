@@ -1,10 +1,12 @@
+# 说明：Recovered/YKHTTPRouter.m 为文档级重建（引用引擎原语 YKOpenApplication 等），
+# 不参与 Lite 编译；其路由契约由 main.m 的 app 分派覆盖。
 TARGET := iphone:clang:latest:14.0
 ARCHS = arm64
 INSTALL_TARGET_PROCESSES =
 
 include $(THEOS)/makefiles/common.mk
 
-# 说明：Recovered/YKHTTPRouter.m 为文档级重建（引用引擎原语 YKOpenApplication 等），\n# 不参与 Lite 编译；其路由契约已由 main.m 的 app 分派覆盖。\nTOOL_NAME = ykenginelite
+TOOL_NAME = ykenginelite
 
 ykenginelite_FILES = \
 	YKEngineLite/main.m \
