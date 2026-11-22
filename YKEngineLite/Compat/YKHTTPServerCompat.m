@@ -81,7 +81,7 @@
 - (void)get:(NSString *)path withBlock:(YKRouteHandler)block    { [self register:@"GET" path:path block:block]; }
 - (void)post:(NSString *)path withBlock:(YKRouteHandler)block   { [self register:@"POST" path:path block:block]; }
 - (void)delete:(NSString *)path withBlock:(YKRouteHandler)block { [self register:@"DELETE" path:path block:block]; }
-- (void)setDefaultHandler:(YKRouteHandler)handler               { self.defaultHandler = [handler copy]; }
+- (void)setDefaultHandler:(YKRouteHandler)handler               { _defaultHandler = [handler copy]; }
 
 - (BOOL)start:(NSError **)error {
     nw_parameters_t params = nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL,
