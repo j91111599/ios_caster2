@@ -11,7 +11,6 @@
 #import <UIKit/UIKit.h>
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
-#import <AVFoundation/AVFoundation.h>
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import <netinet/in.h>
@@ -78,85 +77,6 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     iv.translatesAutoresizingMaskIntoConstraints = NO;
     return iv;
 }
-
-#pragma mark - 扫码页（AVCaptureSession + 二维码）
-
-@interface YKScanVC : UIViewController <AVCaptureMetadataOutputObjectsDelegate>
-@property (nonatomic, copy) void (^onCode)(NSString *code);
-@end
-
-@implementation YKScanVC {
-    AVCaptureSession *_session;
-    AVCaptureVideoPreviewLayer *_preview;
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.view.backgroundColor = [UIColor blackColor];
-    self.title = @"扫码连接";
-
-    _session = [AVCaptureSession new];
-    AVCaptureDevice *cam = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    NSError *err = nil;
-    AVCaptureDeviceInput *in = cam ? [AVCaptureDeviceInput deviceInputWithDevice:cam error:&err] : nil;
-    if (in && [_session canAddInput:in]) [_session addInput:in];
-
-    AVCaptureMetadataOutput *out = [AVCaptureMetadataOutput new];
-    if ([_session canAddOutput:out]) {
-        [_session addOutput:out];
-        [out setMetadataObjectsDelegate:self queue:dispatch_get_main_queue()];
-        out.metadataObjectTypes = @[ AVMetadataObjectTypeQRCode ];
-    }
-
-    _preview = [AVCaptureVideoPreviewLayer layerWithSession:_session];
-    _preview.frame = self.view.bounds;
-    _preview.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    [self.view.layer addSublayer:_preview];
-
-    // 取景框
-    UIView *box = [UIView new];
-    box.frame = CGRectMake(60, 200, self.view.bounds.size.width - 120, self.view.bounds.size.width - 120);
-    box.layer.borderColor = [UIColor whiteColor].CGColor;
-    box.layer.borderWidth = 2;
-    box.layer.cornerRadius = 16;
-    [self.view addSubview:box];
-
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, 120, self.view.bounds.size.width - 40, 24)];
-    tip.text = @"对准电脑端二维码";
-    tip.textColor = [UIColor whiteColor];
-    tip.textAlignment = NSTextAlignmentCenter;
-    [self.view addSubview:tip];
-
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(close)];
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        [self->_session startRunning];
-    });
-}
-
-- (void)viewWillDisappear:(BOOL)animated {
-    [super viewWillDisappear:animated];
-    [_session stopRunning];
-}
-
-- (void)close { [self dismissViewControllerAnimated:YES completion:nil]; }
-
-- (void)captureOutput:(AVCaptureOutput *)output didOutputMetadataObjects:(NSArray *)objs
-       fromConnection:(AVCaptureConnection *)conn {
-    for (AVMetadataObject *o in objs) {
-        if (![o isKindOfClass:[AVMetadataMachineReadableCodeObject class]]) continue;
-        NSString *code = ((AVMetadataMachineReadableCodeObject *)o).stringValue;
-        if (!code.length) continue;
-        [_session stopRunning];
-        if (_onCode) _onCode(code);
-        break;
-    }
-}
-@end
 
 #pragma mark - 列表页（脚本 / 录制）
 
@@ -608,21 +528,25 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 }
 
 - (void)openScan {
-    YKScanVC *vc = [YKScanVC new];
+    UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"连接设备"
+                                                               message:@"输入电脑端配对码"
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+    [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.placeholder = @"配对码"; }];
+    [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     __weak typeof(self) weakSelf = self;
-    vc.onCode = ^(NSString *code) {
-        YKRootVC *me = weakSelf; if (!me) return;
-        [me dismissViewControllerAnimated:YES completion:nil];
+    [ac addAction:[UIAlertAction actionWithTitle:@"连接" style:UIAlertActionStyleDefault
+                                        handler:^(UIAlertAction *a) {
+        NSString *code = ac.textFields.firstObject.text ?: @"device";
         NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
             [NSURL URLWithString:@"http://127.0.0.1:65324/session/create"]];
         req.HTTPMethod = @"POST";
-        req.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{ @"name": code }
-                                                       options:0 error:NULL];
+        req.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{ @"name": code } options:0 error:NULL];
         [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-        [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {}] resume];
-    };
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
-    [self presentViewController:nav animated:YES completion:nil];
+        [[[NSURLSession sharedSession] dataTaskWithRequest:req
+            completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {}] resume];
+        (void)weakSelf;
+    }]];
+    [self presentViewController:ac animated:YES completion:nil];
 }
 
 - (void)tabTapped:(UITapGestureRecognizer *)g {
