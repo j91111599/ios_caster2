@@ -22,7 +22,7 @@ include $(THEOS_MAKE_PATH)/tool.mk
 APPLICATION_NAME = YKEngineApp
 YKEngineApp_FILES = YKEngineLite/App/main.m
 YKEngineApp_FRAMEWORKS = UIKit Foundation
-YKEngineApp_CFLAGS = -fobjc-arc
+YKEngineApp_CFLAGS = -fobjc-arc -Wno-unused-const-variable -Wno-unused-function
 YKEngineApp_LDFLAGS = -fuse-ld=lld
 YKEngineApp_INSTALL_PATH = /Applications
 YKEngineApp_INFO_PLIST = YKEngineLite/App/Info.plist
