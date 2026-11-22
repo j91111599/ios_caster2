@@ -26,6 +26,7 @@ YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngi
 YKEngineApp_FRAMEWORKS = UIKit Foundation Network
 YKEngineApp_CFLAGS = -fobjc-arc -IYKEngineLite/Compat -Wno-unused-const-variable -Wno-unused-function
 YKEngineApp_LDFLAGS = -fuse-ld=lld
+YKEngineApp_CODESIGN_FLAGS = -SYKEngineLite/App/entitlements.plist
 YKEngineApp_INSTALL_PATH = /Applications
 YKEngineApp_INFO_PLIST = YKEngineLite/App/Info.plist
 YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources/AppIcon60x60@2x.png YKEngineLite/App/Info.plist
