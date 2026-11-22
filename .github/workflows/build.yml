@@ -41,6 +41,11 @@ jobs:
           ln -sf "$(which clang)" "$TC/clang"
           ln -sf "$(which clang++)" "$TC/clang++"
           ln -sf "$(which ld.lld)" "$TC/ld" || true
+          STRIP=$(ls /usr/lib/llvm-*/bin/llvm-strip 2>/dev/null | head -1)
+          [ -n "$STRIP" ] && ln -sf "$STRIP" "$TC/strip"
+          NM=$(ls /usr/lib/llvm-*/bin/llvm-nm 2>/dev/null | head -1)
+          [ -n "$NM" ] && ln -sf "$NM" "$TC/nm"
+          ls -la "$TC"
           ls -la "$TC"
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
           echo "$THEOS/bin" >> "$GITHUB_PATH"
