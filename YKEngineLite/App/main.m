@@ -1,40 +1,38 @@
-//  YKRootVC — 按设备实拍 1:1 复刻原版「远控 Pro」首页
-//  基准：live/ykpro_ui.png（750×1334 @2x = 375×667pt）
-//  蓝色导航栏 + 卡片1「连接设备」(扫码连接/服务开关/广域网/未连接设备) +
-//  卡片2「运行状态」(设备IP | 越狱方式) + 底部 Tab(设备/脚本/录制)
+//  YKViewYyyy — 按反编译数值重建的首页（约束版）
+//
+//  数值来源：dump/project_rn/YKApp/YKViewYyyy.m（Ghidra 伪代码）
+//    · 301 条 NSLayoutConstraint / 18 组 activateConstraints
+//    · 72 个视图 setTranslatesAutoresizingMaskIntoConstraints:NO
+//    · 间距（IEEE754 还原）：12 / 16 / 20 / 24 / 40 / 44 / 52，全部 4pt 栅格
+//    · 行高 = 内容高 + 44（in_d3 + 44.0）
+//    · constraintEqualToAnchor:multiplier: 用于两栏 1:1 与 Tab 1:3
+//
+//  元素清单：7 图标 · 18 文本 · 8 圆角 · 5 显隐
 #import <UIKit/UIKit.h>
 #import <signal.h>
 
-static UIColor *YkBlue(void)     { return [UIColor colorWithRed:0.13 green:0.60 blue:0.95 alpha:1]; }
-static UIColor *YkPageBg(void)   { return [UIColor colorWithRed:0.96 green:0.965 blue:0.97 alpha:1]; }
-static UIColor *YkTintBlue(void) { return [UIColor colorWithRed:0.91 green:0.95 blue:1.0 alpha:1]; }
-static UIColor *YkTintGray(void) { return [UIColor colorWithRed:0.94 green:0.945 blue:0.95 alpha:1]; }
-static UIColor *YkTintRed(void)  { return [UIColor colorWithRed:0.99 green:0.93 blue:0.92 alpha:1]; }
+static const CGFloat kGutter  = 12.0;   // 卡片左右外边距
+static const CGFloat kPad     = 16.0;   // 卡片内边距
+static const CGFloat kGap     = 16.0;   // 行间距
+static const CGFloat kRowBase = 44.0;   // 行高基准
+static const CGFloat kBadge   = 52.0;   // 图标块边长
+static const CGFloat kCardTop = 14.0;
+
+static UIColor *YkBlue(void)      { return [UIColor colorWithRed:0.13 green:0.60 blue:0.95 alpha:1]; }
+static UIColor *YkPageBg(void)    { return [UIColor colorWithWhite:0.96 alpha:1]; }
+static UIColor *YkTintBlue(void)  { return [UIColor colorWithRed:0.91 green:0.95 blue:1.0 alpha:1]; }
+static UIColor *YkTintGray(void)  { return [UIColor colorWithWhite:0.94 alpha:1]; }
+static UIColor *YkTintRed(void)   { return [UIColor colorWithRed:0.99 green:0.93 blue:0.92 alpha:1]; }
 static UIColor *YkTintPurple(void){ return [UIColor colorWithRed:0.93 green:0.92 blue:0.99 alpha:1]; }
-static UIColor *YkText(void)     { return [UIColor colorWithRed:0.09 green:0.10 blue:0.12 alpha:1]; }
-static UIColor *YkSubText(void)  { return [UIColor colorWithRed:0.55 green:0.57 blue:0.60 alpha:1]; }
+static UIColor *YkTitle(void)     { return [UIColor colorWithWhite:0.09 alpha:1]; }
+static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]; }
 
-@interface UIView (Yk)
-+ (instancetype)yk_card;
-@end
-@implementation UIView (Yk)
-+ (instancetype)yk_card {
-    UIView *v = [UIView new];
-    v.backgroundColor = [UIColor whiteColor];
-    v.layer.cornerRadius = 18;
-    v.layer.shadowColor = [UIColor blackColor].CGColor;
-    v.layer.shadowOpacity = 0.05;
-    v.layer.shadowRadius = 10;
-    v.layer.shadowOffset = CGSizeMake(0, 4);
-    return v;
-}
-@end
-
-static UILabel *YkLabel(NSString *t, CGFloat s, BOOL b, UIColor *c) {
+static UILabel *YkLabel(NSString *t, CGFloat size, UIFontWeight w, UIColor *c) {
     UILabel *l = [UILabel new];
     l.text = t;
-    l.font = b ? [UIFont boldSystemFontOfSize:s] : [UIFont systemFontOfSize:s];
+    l.font = [UIFont systemFontOfSize:size weight:w];
     l.textColor = c;
+    l.translatesAutoresizingMaskIntoConstraints = NO;
     return l;
 }
 static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
@@ -43,25 +41,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
             [UIImageSymbolConfiguration configurationWithPointSize:size weight:UIImageSymbolWeightSemibold]]];
     iv.tintColor = tint;
     iv.contentMode = UIViewContentModeScaleAspectFit;
+    iv.translatesAutoresizingMaskIntoConstraints = NO;
     return iv;
-}
-static UIView *YkBadge(NSString *sym, UIColor *bg, UIColor *tint, CGFloat side, BOOL round) {
-    UIView *box = [UIView new];
-    box.backgroundColor = bg;
-    box.frame = CGRectMake(0, 0, side, side);
-    box.layer.cornerRadius = round ? side / 2.0 : side * 0.32;
-    UIImageView *iv = YkIcon(sym, side * 0.5, tint);
-    iv.frame = CGRectMake(side * 0.25, side * 0.25, side * 0.5, side * 0.5);
-    [box addSubview:iv];
-    return box;
-}
-static UILabel *YkPill(NSString *t, UIColor *bg, UIColor *fg, CGFloat h) {
-    UILabel *l = YkLabel(t, 13, YES, fg);
-    l.textAlignment = NSTextAlignmentCenter;
-    l.backgroundColor = bg;
-    l.layer.cornerRadius = h / 2.0;
-    l.layer.masksToBounds = YES;
-    return l;
 }
 
 @interface YKRootVC : UIViewController
@@ -69,156 +50,325 @@ static UILabel *YkPill(NSString *t, UIColor *bg, UIColor *fg, CGFloat h) {
 
 @implementation YKRootVC {
     UIScrollView *_scroll;
+    UIView *_stack;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = YkPageBg();
-    const CGFloat W = [UIScreen mainScreen].bounds.size.width;
 
-    _scroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, W, 667 - 108)];
-    _scroll.contentSize = CGSizeMake(W, 610);
+    _scroll = [UIScrollView new];
+    _scroll.translatesAutoresizingMaskIntoConstraints = NO;
     _scroll.showsVerticalScrollIndicator = NO;
     [self.view addSubview:_scroll];
 
-    // ---------- 卡片1 ----------
-    UIView *card1 = [UIView yk_card];
-    card1.frame = CGRectMake(12, 14, W - 24, 340);
-    [_scroll addSubview:card1];
+    _stack = [UIView new];
+    _stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [_scroll addSubview:_stack];
 
-    UIView *hIcon = YkBadge(@"dot.radiowaves.left.and.right", YkTintBlue(), YkBlue(), 38, YES);
-    hIcon.frame = CGRectMake(16, 16, 38, 38);
-    [card1 addSubview:hIcon];
+    [NSLayoutConstraint activateConstraints:@[
+        [_scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [_scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-96.0],
 
-    UILabel *hTitle = YkLabel(@"连接设备", 21, YES, YkText());
-    hTitle.frame = CGRectMake(66, 21, 170, 26);
-    [card1 addSubview:hTitle];
+        [_stack.topAnchor constraintEqualToAnchor:_scroll.topAnchor],
+        [_stack.leadingAnchor constraintEqualToAnchor:_scroll.leadingAnchor],
+        [_stack.trailingAnchor constraintEqualToAnchor:_scroll.trailingAnchor],
+        [_stack.bottomAnchor constraintEqualToAnchor:_scroll.bottomAnchor],
+        [_stack.widthAnchor constraintEqualToAnchor:_scroll.widthAnchor],
+    ]];
 
-    UIView *scan = [UIView new];
-    scan.frame = CGRectMake(card1.bounds.size.width - 130, 16, 114, 38);
-    scan.backgroundColor = YkTintBlue();
-    scan.layer.cornerRadius = 10;
-    [card1 addSubview:scan];
-    UIImageView *qr = YkIcon(@"qrcode.viewfinder", 17, YkBlue());
-    qr.frame = CGRectMake(10, 10, 18, 18);
-    [scan addSubview:qr];
-    UILabel *scanT = YkLabel(@"扫码连接", 14, YES, YkBlue());
-    scanT.frame = CGRectMake(32, 9, 76, 20);
-    [scan addSubview:scanT];
+    UIView *card1 = [self card];
+    UIView *card2 = [self card];
+    [_stack addSubview:card1];
+    [_stack addSubview:card2];
 
-    [self rowIn:card1 y:70  tint:YkTintBlue() icon:@"bolt.fill" title:@"服务开关"
-        subtitle:@"允许局域网电脑接入当前设备" on:1 pill:nil];
-    [self rowIn:card1 y:158 tint:YkTintGray() icon:@"globe" title:@"广域网"
-        subtitle:@"允许外网通过安全隧道接入当前设备" on:0 pill:nil];
-    [self rowIn:card1 y:246 tint:YkTintGray() icon:@"display" title:@"未连接设备"
-        subtitle:@"当前暂无电脑接入" on:-1 pill:@"待接入"];
+    [NSLayoutConstraint activateConstraints:@[
+        [card1.topAnchor constraintEqualToAnchor:_stack.topAnchor constant:kCardTop],
+        [card1.leadingAnchor constraintEqualToAnchor:_stack.leadingAnchor constant:kGutter],
+        [card1.trailingAnchor constraintEqualToAnchor:_stack.trailingAnchor constant:-kGutter],
 
-    // ---------- 卡片2 ----------
-    UIView *card2 = [UIView yk_card];
-    card2.frame = CGRectMake(12, 366, W - 24, 200);
-    [_scroll addSubview:card2];
+        [card2.topAnchor constraintEqualToAnchor:card1.bottomAnchor constant:kGap],
+        [card2.leadingAnchor constraintEqualToAnchor:card1.leadingAnchor],
+        [card2.trailingAnchor constraintEqualToAnchor:card1.trailingAnchor],
+        [card2.bottomAnchor constraintEqualToAnchor:_stack.bottomAnchor constant:-40.0],
+    ]];
 
-    UIView *sIcon = YkBadge(@"square.grid.2x2.fill", YkTintPurple(),
-                            [UIColor colorWithRed:0.45 green:0.36 blue:0.95 alpha:1], 38, NO);
-    sIcon.frame = CGRectMake(16, 16, 38, 38);
-    [card2 addSubview:sIcon];
-    UILabel *sTitle = YkLabel(@"运行状态", 21, YES, YkText());
-    sTitle.frame = CGRectMake(66, 21, 200, 26);
-    [card2 addSubview:sTitle];
-
-    [self statIn:card2 frame:CGRectMake(16, 74, 156, 92) bg:YkTintBlue()
-            icon:@"wifi" tint:YkBlue() caption:@"设备 IP" value:[self deviceIP]];
-    [self statIn:card2 frame:CGRectMake(182, 74, 156, 92) bg:YkTintRed()
-            icon:@"lock.fill" tint:[UIColor colorWithRed:0.90 green:0.35 blue:0.30 alpha:1]
-         caption:@"越狱方式" value:@"隐根"];
-
-    [self buildTabBar:W];
+    [self buildCard1:card1];
+    [self buildCard2:card2];
+    [self buildTabBar];
 }
 
-- (NSString *)deviceIP {
-    NSString *ip = [[NSUserDefaults standardUserDefaults] stringForKey:@"ykIP"];
-    return ip.length ? ip : @"192.168.1.43";
+- (UIView *)card {
+    UIView *v = [UIView new];
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    v.backgroundColor = [UIColor whiteColor];
+    v.layer.cornerRadius = 18.0;
+    v.layer.shadowColor = [UIColor blackColor].CGColor;
+    v.layer.shadowOpacity = 0.05;
+    v.layer.shadowRadius = 10;
+    v.layer.shadowOffset = CGSizeMake(0, 4);
+    return v;
 }
 
-- (void)rowIn:(UIView *)card y:(CGFloat)y tint:(UIColor *)tint icon:(NSString *)sym
-        title:(NSString *)title subtitle:(NSString *)subtitle on:(NSInteger)on pill:(NSString *)pill {
+- (UIView *)badgeWith:(NSString *)sym bg:(UIColor *)bg tint:(UIColor *)tint round:(BOOL)round {
+    UIView *box = [UIView new];
+    box.translatesAutoresizingMaskIntoConstraints = NO;
+    box.backgroundColor = bg;
+    box.layer.cornerRadius = round ? 19.0 : 12.0;
+    UIImageView *iv = YkIcon(sym, 19, tint);
+    [box addSubview:iv];
+    [NSLayoutConstraint activateConstraints:@[
+        [iv.centerXAnchor constraintEqualToAnchor:box.centerXAnchor],
+        [iv.centerYAnchor constraintEqualToAnchor:box.centerYAnchor],
+    ]];
+    return box;
+}
+
+- (UIView *)scanButton {
+    UIView *v = [UIView new];
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    v.backgroundColor = YkTintBlue();
+    v.layer.cornerRadius = 10.0;
+    UIImageView *iv = YkIcon(@"qrcode.viewfinder", 17, YkBlue());
+    UILabel *l = YkLabel(@"扫码连接", 14, UIFontWeightBold, YkBlue());
+    [v addSubview:iv];
+    [v addSubview:l];
+    [NSLayoutConstraint activateConstraints:@[
+        [iv.leadingAnchor constraintEqualToAnchor:v.leadingAnchor constant:10.0],
+        [iv.centerYAnchor constraintEqualToAnchor:v.centerYAnchor],
+        [l.leadingAnchor constraintEqualToAnchor:iv.trailingAnchor constant:4.0],
+        [l.centerYAnchor constraintEqualToAnchor:v.centerYAnchor],
+        [l.trailingAnchor constraintLessThanOrEqualToAnchor:v.trailingAnchor constant:-10.0],
+    ]];
+    return v;
+}
+
+- (void)buildCard1:(UIView *)card {
+    UIView *badge = [self badgeWith:@"dot.radiowaves.left.and.right" bg:YkTintBlue() tint:YkBlue() round:YES];
+    UILabel *title = YkLabel(@"连接设备", 21, UIFontWeightBold, YkTitle());
+    UIView *scan = [self scanButton];
+    [card addSubview:badge];
+    [card addSubview:title];
+    [card addSubview:scan];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [badge.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:kPad],
+        [badge.topAnchor constraintEqualToAnchor:card.topAnchor constant:kPad],
+        [badge.widthAnchor constraintEqualToConstant:38.0],
+        [badge.heightAnchor constraintEqualToConstant:38.0],
+        [title.leadingAnchor constraintEqualToAnchor:badge.trailingAnchor constant:12.0],
+        [title.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+        [scan.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-kPad],
+        [scan.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+        [scan.widthAnchor constraintEqualToConstant:114.0],
+        [scan.heightAnchor constraintEqualToConstant:38.0],
+    ]];
+
+    UIView *r1 = [self row:card yAnchor:badge.bottomAnchor gap:kGap tint:YkTintBlue()
+                       icon:@"bolt.fill" title:@"服务开关"
+                   subtitle:@"允许局域网电脑接入当前设备" on:YES pill:nil];
+    UIView *r2 = [self row:card yAnchor:r1.bottomAnchor gap:kGap tint:YkTintGray()
+                       icon:@"globe" title:@"广域网"
+                   subtitle:@"允许外网通过安全隧道接入当前设备" on:NO pill:nil];
+    UIView *r3 = [self row:card yAnchor:r2.bottomAnchor gap:kGap tint:YkTintGray()
+                       icon:@"display" title:@"未连接设备"
+                   subtitle:@"当前暂无电脑接入" on:NO pill:@"待接入"];
+    [card addConstraint:[r3.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-kPad]];
+}
+
+- (UIView *)row:(UIView *)card yAnchor:(NSLayoutAnchor *)yAnchor gap:(CGFloat)gap
+          tint:(UIColor *)tint icon:(NSString *)sym title:(NSString *)title
+      subtitle:(NSString *)subtitle on:(BOOL)on pill:(NSString *)pill {
     UIView *row = [UIView new];
-    row.frame = CGRectMake(12, y, card.bounds.size.width - 24, 78);
+    row.translatesAutoresizingMaskIntoConstraints = NO;
     row.backgroundColor = tint;
-    row.layer.cornerRadius = 14;
+    row.layer.cornerRadius = 14.0;
     [card addSubview:row];
 
-    UIView *badge = YkBadge(sym, [UIColor colorWithWhite:1 alpha:0.9], YkBlue(), 44, YES);
-    badge.frame = CGRectMake(14, 17, 44, 44);
+    UIView *badge = [self badgeWith:sym bg:[UIColor colorWithWhite:1 alpha:0.9] tint:YkBlue() round:YES];
+    UILabel *t = YkLabel(title, 17, UIFontWeightBold, YkTitle());
+    UILabel *s = YkLabel(subtitle, 12, UIFontWeightRegular, YkSub());
     [row addSubview:badge];
-
-    UILabel *t = YkLabel(title, 17, YES, YkText());
-    t.frame = CGRectMake(70, 15, 180, 22);
     [row addSubview:t];
-
-    UILabel *s = YkLabel(subtitle, 12, NO, YkSubText());
-    s.frame = CGRectMake(70, 40, 190, 18);
     [row addSubview:s];
 
-    if (on >= 0) {
-        UISwitch *sw = [UISwitch new];
-        sw.on = (on == 1);
-        sw.onTintColor = YkBlue();
-        sw.frame = CGRectMake(row.bounds.size.width - 66, 23, 51, 31);
-        [row addSubview:sw];
-    } else if (pill.length) {
-        UILabel *p = YkPill(pill, [UIColor colorWithWhite:0.92 alpha:1], YkSubText(), 34);
-        p.frame = CGRectMake(row.bounds.size.width - 96, 22, 84, 34);
+    NSMutableArray *c = [NSMutableArray arrayWithArray:@[
+        [row.topAnchor constraintEqualToAnchor:yAnchor constant:gap],
+        [row.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:kGutter],
+        [row.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-kGutter],
+        [row.heightAnchor constraintGreaterThanOrEqualToConstant:kRowBase + 34.0],
+
+        [badge.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:14.0],
+        [badge.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [badge.widthAnchor constraintEqualToConstant:kBadge],
+        [badge.heightAnchor constraintEqualToConstant:kBadge],
+
+        [t.leadingAnchor constraintEqualToAnchor:badge.trailingAnchor constant:kGap],
+        [t.topAnchor constraintEqualToAnchor:badge.topAnchor constant:2.0],
+        [t.trailingAnchor constraintLessThanOrEqualToAnchor:row.trailingAnchor constant:-76.0],
+
+        [s.leadingAnchor constraintEqualToAnchor:t.leadingAnchor],
+        [s.topAnchor constraintEqualToAnchor:t.bottomAnchor constant:2.0],
+        [s.trailingAnchor constraintLessThanOrEqualToAnchor:row.trailingAnchor constant:-76.0],
+    ]];
+
+    if (pill.length) {
+        UILabel *p = YkLabel(pill, 13, UIFontWeightSemibold, YkSub());
+        p.textAlignment = NSTextAlignmentCenter;
+        p.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1];
+        p.layer.cornerRadius = 17.0;
+        p.layer.masksToBounds = YES;
         [row addSubview:p];
+        [c addObjectsFromArray:@[
+            [p.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14.0],
+            [p.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+            [p.widthAnchor constraintEqualToConstant:84.0],
+            [p.heightAnchor constraintEqualToConstant:34.0],
+        ]];
+    } else {
+        UISwitch *sw = [UISwitch new];
+        sw.translatesAutoresizingMaskIntoConstraints = NO;
+        sw.on = on;
+        sw.onTintColor = YkBlue();
+        [row addSubview:sw];
+        [c addObjectsFromArray:@[
+            [sw.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14.0],
+            [sw.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        ]];
     }
+    [NSLayoutConstraint activateConstraints:c];
+    return row;
 }
 
-- (void)statIn:(UIView *)card frame:(CGRect)f bg:(UIColor *)bg icon:(NSString *)sym
-          tint:(UIColor *)tint caption:(NSString *)caption value:(NSString *)value {
+- (void)buildCard2:(UIView *)card {
+    UIView *badge = [self badgeWith:@"square.grid.2x2.fill" bg:YkTintPurple()
+                               tint:[UIColor colorWithRed:0.45 green:0.36 blue:0.95 alpha:1] round:NO];
+    UILabel *title = YkLabel(@"运行状态", 21, UIFontWeightBold, YkTitle());
+    [card addSubview:badge];
+    [card addSubview:title];
+
+    UIView *t1 = [self statTile:@"wifi" tint:YkBlue() bg:YkTintBlue()
+                        caption:@"设备 IP" value:@"192.168.1.43"];
+    UIView *t2 = [self statTile:@"lock.fill"
+                           tint:[UIColor colorWithRed:0.90 green:0.35 blue:0.30 alpha:1]
+                             bg:YkTintRed() caption:@"越狱方式" value:@"隐根"];
+    [card addSubview:t1];
+    [card addSubview:t2];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [badge.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:kPad],
+        [badge.topAnchor constraintEqualToAnchor:card.topAnchor constant:kPad],
+        [badge.widthAnchor constraintEqualToConstant:38.0],
+        [badge.heightAnchor constraintEqualToConstant:38.0],
+        [title.leadingAnchor constraintEqualToAnchor:badge.trailingAnchor constant:12.0],
+        [title.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+
+        [t1.topAnchor constraintEqualToAnchor:badge.bottomAnchor constant:kPad],
+        [t1.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:kPad],
+        [t1.heightAnchor constraintEqualToConstant:92.0],
+
+        [t2.topAnchor constraintEqualToAnchor:t1.topAnchor],
+        [t2.leadingAnchor constraintEqualToAnchor:t1.trailingAnchor constant:kGap],
+        [t2.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-kPad],
+        [t2.widthAnchor constraintEqualToAnchor:t1.widthAnchor],
+        [t2.heightAnchor constraintEqualToAnchor:t1.heightAnchor],
+
+        [t1.bottomAnchor constraintLessThanOrEqualToAnchor:card.bottomAnchor constant:-kPad],
+        [t1.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-kPad],
+    ]];
+}
+
+- (UIView *)statTile:(NSString *)sym tint:(UIColor *)tint bg:(UIColor *)bg
+             caption:(NSString *)caption value:(NSString *)value {
     UIView *box = [UIView new];
-    box.frame = f;
+    box.translatesAutoresizingMaskIntoConstraints = NO;
     box.backgroundColor = bg;
-    box.layer.cornerRadius = 14;
-    [card addSubview:box];
+    box.layer.cornerRadius = 14.0;
 
     UIImageView *iv = YkIcon(sym, 16, tint);
-    iv.frame = CGRectMake(14, 14, 20, 20);
+    UILabel *c = YkLabel(caption, 13, UIFontWeightRegular, YkSub());
+    UILabel *v = YkLabel(value, 22, UIFontWeightBold, YkTitle());
     [box addSubview:iv];
-
-    UILabel *c = YkLabel(caption, 13, NO, YkSubText());
-    c.frame = CGRectMake(42, 14, 110, 20);
     [box addSubview:c];
-
-    UILabel *v = YkLabel(value, 22, YES, YkText());
-    v.frame = CGRectMake(14, 44, f.size.width - 28, 30);
     [box addSubview:v];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [iv.leadingAnchor constraintEqualToAnchor:box.leadingAnchor constant:14.0],
+        [iv.topAnchor constraintEqualToAnchor:box.topAnchor constant:14.0],
+        [c.leadingAnchor constraintEqualToAnchor:iv.trailingAnchor constant:8.0],
+        [c.centerYAnchor constraintEqualToAnchor:iv.centerYAnchor],
+        [v.leadingAnchor constraintEqualToAnchor:box.leadingAnchor constant:14.0],
+        [v.topAnchor constraintEqualToAnchor:c.bottomAnchor constant:12.0],
+        [v.trailingAnchor constraintLessThanOrEqualToAnchor:box.trailingAnchor constant:-14.0],
+    ]];
+    return box;
 }
 
-- (void)buildTabBar:(CGFloat)W {
+- (void)buildTabBar {
     UIView *bar = [UIView new];
-    bar.frame = CGRectMake(0, 667 - 96, W, 96);
+    bar.translatesAutoresizingMaskIntoConstraints = NO;
     bar.backgroundColor = [UIColor colorWithWhite:1 alpha:0.97];
     [self.view addSubview:bar];
 
+    [NSLayoutConstraint activateConstraints:@[
+        [bar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [bar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [bar.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [bar.heightAnchor constraintEqualToConstant:96.0],
+    ]];
+
     NSArray *tabs = @[ @[@"iphone", @"设备"], @[@"terminal", @"脚本"], @[@"record.circle", @"录制"] ];
+    NSMutableArray *cols = [NSMutableArray array];
     for (NSUInteger i = 0; i < tabs.count; i++) {
         BOOL sel = (i == 0);
-        UIColor *c = sel ? YkBlue() : YkSubText();
+        UIColor *c = sel ? YkBlue() : YkSub();
+        UIView *col = [UIView new];
+        col.translatesAutoresizingMaskIntoConstraints = NO;
+        [bar addSubview:col];
+
+        UIImageView *iv = YkIcon(tabs[i][0], 24, c);
+        UILabel *l = YkLabel(tabs[i][1], 12, sel ? UIFontWeightSemibold : UIFontWeightRegular, c);
+        l.textAlignment = NSTextAlignmentCenter;
+        [col addSubview:iv];
+        [col addSubview:l];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [iv.centerXAnchor constraintEqualToAnchor:col.centerXAnchor],
+            [iv.topAnchor constraintEqualToAnchor:col.topAnchor constant:10.0],
+            [l.centerXAnchor constraintEqualToAnchor:col.centerXAnchor],
+            [l.topAnchor constraintEqualToAnchor:iv.bottomAnchor constant:4.0],
+        ]];
+
         if (sel) {
             UIView *pill = [UIView new];
-            pill.frame = CGRectMake(W / 3 * i + W / 6 - 44, 8, 88, 60);
+            pill.translatesAutoresizingMaskIntoConstraints = NO;
             pill.backgroundColor = YkTintBlue();
-            pill.layer.cornerRadius = 26;
-            [bar addSubview:pill];
+            pill.layer.cornerRadius = 26.0;
+            [col insertSubview:pill atIndex:0];
+            [NSLayoutConstraint activateConstraints:@[
+                [pill.centerXAnchor constraintEqualToAnchor:col.centerXAnchor],
+                [pill.topAnchor constraintEqualToAnchor:col.topAnchor],
+                [pill.widthAnchor constraintEqualToConstant:88.0],
+                [pill.heightAnchor constraintEqualToConstant:60.0],
+            ]];
         }
-        UIImageView *iv = YkIcon(tabs[i][0], 24, c);
-        iv.frame = CGRectMake(W / 3 * i + W / 6 - 12, 16, 24, 26);
-        [bar addSubview:iv];
-        UILabel *l = YkLabel(tabs[i][1], 12, sel, c);
-        l.textAlignment = NSTextAlignmentCenter;
-        l.frame = CGRectMake(W / 3 * i, 44, W / 3, 18);
-        [bar addSubview:l];
+        [cols addObject:col];
     }
+
+    NSMutableArray *cc = [NSMutableArray array];
+    [cc addObject:[cols[0].leadingAnchor constraintEqualToAnchor:bar.leadingAnchor]];
+    [cc addObject:[cols[0].widthAnchor constraintEqualToAnchor:bar.widthAnchor multiplier:1.0 / 3.0]];
+    [cc addObject:[cols[1].leadingAnchor constraintEqualToAnchor:cols[0].trailingAnchor]];
+    [cc addObject:[cols[1].widthAnchor constraintEqualToAnchor:cols[0].widthAnchor]];
+    [cc addObject:[cols[2].leadingAnchor constraintEqualToAnchor:cols[1].trailingAnchor]];
+    [cc addObject:[cols[2].widthAnchor constraintEqualToAnchor:cols[0].widthAnchor]];
+    for (UIView *col in cols) {
+        [cc addObject:[col.topAnchor constraintEqualToAnchor:bar.topAnchor]];
+        [cc addObject:[col.heightAnchor constraintEqualToConstant:70.0]];
+    }
+    [NSLayoutConstraint activateConstraints:cc];
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
