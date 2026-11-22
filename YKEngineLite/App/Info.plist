@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+	<key>CFBundleDisplayName</key><string>Pro</string>
+	<key>CFBundleExecutable</key><string>YKEngineApp</string>
+	<key>CFBundleIdentifier</key><string>com.yk.engine.ui</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>YKEngineApp</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>3.9.3</string>
+	<key>CFBundleVersion</key><string>3.9.3</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array>
+			<key>CFBundleIconName</key><string>AppIcon</string>
+		</dict>
+	</dict>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>MinimumOSVersion</key><string>13.0</string>
+	<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+	<key>UIDeviceFamily</key><array><integer>1</integer></array>
+	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+	<key>UIRequiresFullScreen</key><true/>
+	<key>UIStatusBarStyle</key><string>UIStatusBarStyleLightContent</string>
+	<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+	<key>UIViewControllerBasedStatusBarAppearance</key><false/>
+</dict>
+</plist>
