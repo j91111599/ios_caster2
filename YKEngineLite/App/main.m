@@ -10,6 +10,7 @@
 //  元素清单：7 图标 · 18 文本 · 8 圆角 · 5 显隐
 #import <UIKit/UIKit.h>
 #import <signal.h>
+#import "YKHTTPServerCompat.h"
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import <netinet/in.h>
@@ -83,6 +84,9 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 @implementation YKRootVC {
     UIScrollView *_scroll;
     UIView *_stack;
+    HTTPServer *_srv;
+    NSTimer *_poller;
+    UILabel *_connValue;
 }
 
 - (void)viewDidLoad {
@@ -425,7 +429,43 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 - (void)serviceToggled:(UISwitch *)sw {
     [[NSUserDefaults standardUserDefaults] setBool:sw.isOn forKey:@"ykServiceOn"];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    NSLog(@"[YKEngineLite] service toggled -> %@", sw.isOn ? @"ON" : @"OFF");
+    if (sw.isOn) {
+        if (!_srv) {
+            _srv = [HTTPServer new];
+            _srv.port = 65324;
+            _srv.interface = @"loopback";
+            [_srv get:@"/health" withBlock:^(RouteRequest *req, RouteResponse *res) {
+                [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
+                                                     @"engine": @"reconstructed-inapp",
+                                                     @"port": @65324 } }];
+            }];
+        }
+        NSError *err = nil;
+        BOOL ok = [_srv start:&err];
+        NSLog(@"[YKEngineLite] engine start=%d err=%@", ok, err);
+        [self startPolling];
+    } else {
+        [_srv stop]; _srv = nil;
+        [_poller invalidate]; _poller = nil;
+        _connValue.text = @"待接入";
+        _connValue.textColor = YkSub();
+    }
+}
+
+- (void)startPolling {
+    if (_poller) return;
+    _poller = [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *t) {
+        NSURL *u = [NSURL URLWithString:@"http://127.0.0.1:65324/health"];
+        [[[NSURLSession sharedSession] dataTaskWithURL:u
+            completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+                NSDictionary *j = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
+                BOOL ready = [j[@"value"][@"ready"] boolValue];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    self->_connValue.text = ready ? @"本机 · 已连接" : @"待接入";
+                    self->_connValue.textColor = ready ? YkBlue() : YkSub();
+                });
+            }] resume];
+    }];
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
