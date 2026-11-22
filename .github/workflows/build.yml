@@ -5,18 +5,23 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-14
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Cache Theos
         uses: actions/cache@v4
         with:
           path: ~/theos
-          key: theos-lite-${{ runner.os }}-v1
+          key: theos-lite-v1
 
       - name: Setup Theos
         run: |
@@ -32,6 +37,7 @@ jobs:
           fi
           echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
           echo "$HOME/theos/bin" >> "$GITHUB_PATH"
+          ls "$HOME/theos/sdks" | head -5
 
       - name: Build (rootless)
         run: |
@@ -40,15 +46,21 @@ jobs:
           make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 DEBUG=0
           ls -la packages/
 
-      - name: Upload
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ykenginelite-deb
           path: packages/*.deb
           if-no-files-found: error
 
-      - name: Attach to release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: packages/*.deb
+      - name: Publish deb back to repo
+        run: |
+          set -e
+          mkdir -p dist
+          cp packages/*.deb dist/
+          ls -la dist/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist
+          git commit -m "build: publish deb [skip ci]" || echo "nothing to commit"
+          git push || echo "push failed"
