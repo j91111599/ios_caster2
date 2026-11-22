@@ -489,21 +489,6 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     [NSLayoutConstraint activateConstraints:cc];
 }
 
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    static BOOL fired = NO;
-    if (fired) return;
-    fired = YES;
-    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
-    BOOL saved = [ud objectForKey:@"ykServiceOn"] ? [ud boolForKey:@"ykServiceOn"] : YES;
-    if (!saved) return;
-    __weak typeof(self) weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        YKRootVC *me = weakSelf; if (!me) return;
-        if (me->_serviceSwitch.on) [me serviceToggled:me->_serviceSwitch];
-    });
-}
 
 - (void)openScan {
     NSLog(@"[YKEngineLite] openScan tapped");
