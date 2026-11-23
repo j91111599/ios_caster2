@@ -98,6 +98,10 @@ static NSString *YkUUID40(void) {
 // ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
 static NSMutableDictionary *gImages = nil;
 extern NSDictionary *YkMatchTemplate(UIImage *scene, UIImage *tpl, double threshold);
+extern NSDictionary *YkTouchTap(double x, double y);
+extern NSDictionary *YkTouchLongPress(double x, double y, double d);
+extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d, NSInteger steps);
+extern NSDictionary *YkTouchMulti(int fingers, double x1, double y1, double x2, double y2, double d);
 extern NSArray *YkMatchTemplateAll(UIImage *scene, UIImage *tpl, double threshold, NSInteger maxResults);
 extern NSDictionary *YkMatchTemplateScale(UIImage *scene, UIImage *tpl, double threshold, NSArray *scales, double *usedScale);
 
@@ -585,3 +589,29 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
 
     return YKErr(@"not_found", path);
 }
+    // ---- touch（IOHID 注入）----
+    if ([head isEqualToString:@"touch"]) {
+        NSString *verb = seg.count > 1 ? seg[1] : @"";
+        double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        if ([verb isEqualToString:@"tap"] || [verb isEqualToString:@"tapAt"])
+            return YkTouchTap(x, y);
+        if ([verb isEqualToString:@"down"]) {
+            return YkTouchLongPress(x, y, 0.05);
+        }
+        if ([verb isEqualToString:@"longPress"] || [verb isEqualToString:@"longTap"])
+            return YkTouchLongPress(x, y, [body[@"duration"] doubleValue] ?: 1.0);
+        if ([verb isEqualToString:@"swipe"] || [verb isEqualToString:@"drag"]) {
+            double x2 = [body[@"toX"] doubleValue] ?: [body[@"x2"] doubleValue];
+            double y2 = [body[@"toY"] doubleValue] ?: [body[@"y2"] doubleValue];
+            return YkTouchSwipe(x, y, x2, y2, [body[@"duration"] doubleValue] ?: 0.3,
+                                [body[@"steps"] integerValue] ?: 12);
+        }
+        if ([verb isEqualToString:@"multi"] || [verb isEqualToString:@"pinch"])
+            return YkTouchMulti((int)([body[@"fingers"] integerValue] ?: 2),
+                                x, y,
+                                [body[@"x2"] doubleValue], [body[@"y2"] doubleValue],
+                                [body[@"duration"] doubleValue] ?: 0.3);
+        return YKErr(@"not_found", verb);
+    }
+
+
