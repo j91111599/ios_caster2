@@ -61,6 +61,11 @@ jobs:
             cp -R /tmp/ocv/opencv2.framework Frameworks/ || true
           fi
           ls Frameworks
+          # 把 framework 放进 app bundle，否则 dyld 找不到
+          APP=layout/var/jb/Applications/YKEngineApp.app/Frameworks
+          mkdir -p "$APP"
+          cp -R Frameworks/opencv2.framework "$APP"/
+          ls -d "$APP"
 
       - name: Build (rootless)
         run: |
