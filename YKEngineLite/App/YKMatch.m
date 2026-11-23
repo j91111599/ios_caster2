@@ -5,6 +5,21 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
+// 文件日志（设备上可直接 /file/read 读取）
+static void YkLog(NSString *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    NSString *line = [NSString stringWithFormat:@"[%.3f] %@\n",
+                      [[NSDate date] timeIntervalSince1970], msg];
+    NSString *path = @"/tmp/yk_match.log";
+    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!fh) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL]; return; }
+    [fh seekToEndOfFile];
+    [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+    [fh closeFile];
+}
+
 typedef struct { int w, h; unsigned char *g; } YkGray;
 
 static YkGray YkGrayFromImage(UIImage *img) {
@@ -70,11 +85,13 @@ static double YkZNCC(YkGray s, YkGray t, int ox, int oy) {
 // 返回 @{x,y,score} 或 nil
 NSDictionary *YkMatchTemplate(UIImage *sceneImg, UIImage *tplImg, double threshold)
 {
-    if (!sceneImg || !tplImg) return nil;
+    YkLog(@"enter scene=%@ tpl=%@", sceneImg ? @"Y" : @"N", tplImg ? @"Y" : @"N");
+    if (!sceneImg || !tplImg) { YkLog(@"nil image"); return nil; }
     YkGray scene = YkGrayFromImage(sceneImg);
     YkGray tpl = YkGrayFromImage(tplImg);
-    if (!scene.g || !tpl.g) { YkGrayFree(&scene); YkGrayFree(&tpl); return nil; }
-    if (tpl.w > scene.w || tpl.h > scene.h) { YkGrayFree(&scene); YkGrayFree(&tpl); return nil; }
+    YkLog(@"gray scene=%dx%d tpl=%dx%d", scene.w, scene.h, tpl.w, tpl.h);
+    if (!scene.g || !tpl.g) { YkLog(@"gray fail"); YkGrayFree(&scene); YkGrayFree(&tpl); return nil; }
+    if (tpl.w > scene.w || tpl.h > scene.h) { YkLog(@"tpl larger"); YkGrayFree(&scene); YkGrayFree(&tpl); return nil; }
 
     // 粗搜因子：上限 4，避免过度下采样导致定位漂移
     int f = 1;
@@ -120,6 +137,7 @@ NSDictionary *YkMatchTemplate(UIImage *sceneImg, UIImage *tplImg, double thresho
             }
         }
     }
+    YkLog(@"best=%.4f at (%d,%d) f=%d th=%.2f", bestFine, fx, fy, f, threshold);
     YkGrayFree(&scene); YkGrayFree(&tpl);
 
     if (bestFine < threshold) return nil;
