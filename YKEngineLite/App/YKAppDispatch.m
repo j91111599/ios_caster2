@@ -298,11 +298,26 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
         if ([verb isEqualToString:@"capture"]) {
             __block UIImage *img = nil;
             void (^doCap)(void) = ^{
-                CGSize sz = [UIScreen mainScreen].bounds.size;
-                UIWindow *w = UIApplication.sharedApplication.keyWindow ?: UIApplication.sharedApplication.windows.firstObject;
+                UIWindow *w = nil;
+                for (UIWindow *win in UIApplication.sharedApplication.windows) {
+                    if (win.isKeyWindow) { w = win; break; }
+                }
+                if (!w) w = UIApplication.sharedApplication.windows.firstObject;
                 if (!w) return;
+                CGSize sz = w.bounds.size;
+                if (sz.width < 1 || sz.height < 1) sz = [UIScreen mainScreen].bounds.size;
                 UIGraphicsBeginImageContextWithOptions(sz, NO, 0);
-                [w drawViewHierarchyInRect:CGRectMake(0,0,sz.width,sz.height) afterScreenUpdates:YES];
+                CGContextRef ctx = UIGraphicsGetCurrentContext();
+                // 先试 drawViewHierarchy，失败再退到 layer 渲染
+                BOOL drew = NO;
+                @try {
+                    drew = [w drawViewHierarchyInRect:CGRectMake(0, 0, sz.width, sz.height)
+                                   afterScreenUpdates:YES];
+                } @catch (__unused NSException *e) { drew = NO; }
+                if (!drew) {
+                    @try { [w.layer renderInContext:ctx]; }
+                    @catch (__unused NSException *e) { }
+                }
                 img = UIGraphicsGetImageFromCurrentImageContext();
                 UIGraphicsEndImageContext();
             };
