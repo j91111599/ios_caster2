@@ -4,6 +4,7 @@
 //  依据：dump/Recovered/ 中已完成的模块类（YKFileModule / YKPrefsModule /
 //        YKPlistModule / YKScreenModule / YKCryptoModule / YKNetworkModule / YKUIDispatcher）
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 @class RouteRequest, RouteResponse;
 
@@ -147,6 +148,34 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
         NSString *e = nil;
         NSDictionary *r = [[YKUIDispatcher shared] dispatchMethod:method path:path body:body error:&e];
         return r ?: YKErr(@"ui_error", e ?: @"派发失败");
+    }
+
+    // ---- device（只读，无私有 API）----
+    if ([head isEqualToString:@"device"]) {
+        UIDevice *d = [UIDevice currentDevice];
+        NSString *verb = seg.count > 1 ? seg[1] : @"info";
+        if ([verb isEqualToString:@"model"])   return @{ @"value": d.model ?: @"iPhone" };
+        if ([verb isEqualToString:@"name"])    return @{ @"value": d.name ?: @"" };
+        if ([verb isEqualToString:@"systemVersion"] || [verb isEqualToString:@"version"])
+            return @{ @"value": d.systemVersion ?: @"" };
+        if ([verb isEqualToString:@"uuid"])    return @{ @"value": d.identifierForVendor.UUIDString ?: @"" };
+        if ([verb isEqualToString:@"locale"])
+            return @{ @"value": [NSLocale currentLocale].localeIdentifier ?: @"" };
+        if ([verb isEqualToString:@"isScreenLocked"])
+            return @{ @"value": @(NO) };
+        if ([verb isEqualToString:@"info"]) {
+            CGRect b = [UIScreen mainScreen].bounds;
+            return @{ @"value": @{ @"model": d.model ?: @"iPhone",
+                                   @"name": d.name ?: @"",
+                                   @"systemName": d.systemName ?: @"iOS",
+                                   @"systemVersion": d.systemVersion ?: @"",
+                                   @"identifier": d.identifierForVendor.UUIDString ?: @"",
+                                   @"screenWidth": @(b.size.width),
+                                   @"screenHeight": @(b.size.height),
+                                   @"scale": @([UIScreen mainScreen].scale),
+                                   @"locale": [NSLocale currentLocale].localeIdentifier ?: @"" } };
+        }
+        return YKErr(@"not_found", verb);
     }
 
     return YKErr(@"not_found", path);
