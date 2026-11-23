@@ -481,6 +481,72 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             return @{ @"value": @{ @"count": @(hits.count), @"points": hits } };
         }
 
+
+        // ---- 多点找色 / 颜色比对 ----
+        if ([verb hasPrefix:@"findMultiColor"] || [verb hasPrefix:@"cmpColor"] ||
+            [verb isEqualToString:@"colorDiff"] || [verb isEqualToString:@"countMultiColor"]) {
+            if (!src) return YKErr(@"not_found", @"imageId");
+            NSInteger tol = [body[@"tolerance"] integerValue] ?: 0;
+            NSInteger maxN = [body[@"maxResults"] integerValue] ?: 100;
+
+            // 单点比对
+            if ([verb hasPrefix:@"cmpColor"]) {
+                NSInteger px = [body[@"x"] integerValue], py = [body[@"y"] integerValue];
+                int hex = YkHexColor((body[@"colors"] ?: @[]).count ? body[@"colors"][0] : body[@"color"]);
+                if (hex < 0) return YKErr(@"invalid argument", @"缺少 color");
+                int p4[4] = {0};
+                if (!YkPixelAt(src, px, py, p4)) return YKErr(@"invalid argument", @"坐标越界");
+                int dr = abs(p4[0] - ((hex >> 16) & 0xFF));
+                int dg = abs(p4[1] - ((hex >> 8) & 0xFF));
+                int db = abs(p4[2] - (hex & 0xFF));
+                BOOL ok = (dr <= tol && dg <= tol && db <= tol);
+                if ([verb hasSuffix:@"Ex"])
+                    return @{ @"value": @{ @"match": @(ok), @"r": @(p4[0]), @"g": @(p4[1]),
+                                           @"b": @(p4[2]), @"dr": @(dr), @"dg": @(dg), @"db": @(db) } };
+                return @{ @"value": @(ok) };
+            }
+
+            // 多点找色：anchor + points[{dx,dy,color}]
+            NSArray *pts = body[@"points"];
+            if (![pts isKindOfClass:[NSArray class]] || !pts.count)
+                return YKErr(@"invalid argument", @"缺少 points");
+            NSInteger ax = [body[@"anchorX"] integerValue] ?: [body[@"x"] integerValue];
+            NSInteger ay = [body[@"anchorY"] integerValue] ?: [body[@"y"] integerValue];
+            CGRect rect = CGRectMake(0, 0, CGImageGetWidth(src.CGImage), CGImageGetHeight(src.CGImage));
+            if (body[@"region"] && [body[@"region"] isKindOfClass:[NSDictionary class]]) {
+                NSDictionary *rg = body[@"region"];
+                rect = CGRectMake([rg[@"x"] doubleValue], [rg[@"y"] doubleValue],
+                                  [rg[@"width"] doubleValue], [rg[@"height"] doubleValue]);
+            }
+            NSMutableArray *hits = [NSMutableArray array];
+            NSInteger count = 0;
+            for (NSInteger y = (NSInteger)rect.origin.y; y < (NSInteger)(rect.origin.y + rect.size.height); y++) {
+                for (NSInteger x = (NSInteger)rect.origin.x; x < (NSInteger)(rect.origin.x + rect.size.width); x++) {
+                    BOOL all = YES;
+                    for (NSDictionary *pt in pts) {
+                        NSInteger qx = x + [pt[@"dx"] integerValue];
+                        NSInteger qy = y + [pt[@"dy"] integerValue];
+                        int hex = YkHexColor(pt[@"color"]);
+                        if (hex < 0) { all = NO; break; }
+                        int p4[4] = {0};
+                        if (!YkPixelAt(src, qx, qy, p4)) { all = NO; break; }
+                        if (abs(p4[0] - ((hex >> 16) & 0xFF)) > tol ||
+                            abs(p4[1] - ((hex >> 8) & 0xFF)) > tol ||
+                            abs(p4[2] - (hex & 0xFF)) > tol) { all = NO; break; }
+                    }
+                    if (!all) continue;
+                    count++;
+                    if ([verb isEqualToString:@"countMultiColor"]) continue;
+                    if ((NSInteger)hits.count < maxN)
+                        [hits addObject:@{ @"x": @(x), @"y": @(y) }];
+                    if ((NSInteger)hits.count >= maxN && ![verb hasSuffix:@"All"]) { y = (NSInteger)(rect.origin.y + rect.size.height); break; }
+                }
+            }
+            if ([verb isEqualToString:@"countMultiColor"]) return @{ @"value": @(count) };
+            if ([verb hasSuffix:@"All"]) return @{ @"value": @{ @"count": @(hits.count), @"points": hits } };
+            return @{ @"value": hits.count ? hits.firstObject : [NSNull null] };
+        }
+
         // ---- findImage（OpenCV 模板匹配）----
         if ([verb hasPrefix:@"findImage"] || [verb hasPrefix:@"opencvFindImage"]) {
             if (!src) return YKErr(@"not_found", @"imageId");
