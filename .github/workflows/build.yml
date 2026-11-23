@@ -51,7 +51,13 @@ jobs:
           echo "$THEOS/bin" >> "$GITHUB_PATH"
           ls "$THEOS/sdks" | head -3
 
-      - name: Build (rootless)
+'      - name: Stage SpringBoard tweak
+        run: |
+          for f in $(find .theos/obj -name "YKSpringTouch.dylib" | head -1); do
+            cp "$f" layout/var/jb/Library/MobileSubstrate/DynamicLibraries/ && echo "staged $f"
+          done || true
+
+      - name: Build (rootless)'
         run: |
           set -euo pipefail
           make clean || true
