@@ -15,7 +15,7 @@ static NSDictionary *YkSocketSend(NSDictionary *req) {
     if (fd < 0) return nil;
     struct sockaddr_un addr = {0};
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, "/var/tmp/yktouch.sock", sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, "/private/preboot/yk_touch.sock", sizeof(addr.sun_path) - 1);
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return nil; }
     NSData *body = [NSJSONSerialization dataWithJSONObject:req options:0 error:NULL];
     NSMutableData *md = [NSMutableData dataWithData:body ?: [NSData data]];

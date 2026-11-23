@@ -135,7 +135,7 @@ static NSData *HandleLine(NSString *line) {
 }
 
 static void *ServerMain(void *arg) {
-    const char *path = "/var/tmp/yktouch.sock";
+    const char *path = "/private/preboot/yk_touch.sock";
     unlink(path);
     int srv = socket(AF_UNIX, SOCK_STREAM, 0);
     if (srv < 0) return NULL;
