@@ -39,43 +39,43 @@ static void *YkSym(const char *name) {
 
 static IOHIDEventSystemClientRef YkHIDClient(void) {
     if (gHIDClient) return gHIDClient;
-    typedef IOHIDEventSystemClientRef (*CreateFn)(CFAllocatorRef);
-    CreateFn create = (CreateFn)YkSym("IOHIDEventSystemClientCreate");
-    if (!create) create = (CreateFn)YkSym("IOHIDEventSystemClientCreateWithType");
-    if (create) gHIDClient = create(kCFAllocatorDefault);
+    void *s1 = YkSym("IOHIDEventSystemClientCreateWithType");
+    if (s1) gHIDClient = ((IOHIDEventSystemClientRef (*)(int))s1)(2);
+    if (!gHIDClient) {
+        void *s2 = YkSym("IOHIDEventSystemClientCreate");
+        if (s2) gHIDClient = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef))s2)(kCFAllocatorDefault);
+    }
     return gHIDClient;
 }
 
 static void YkSendEvent(IOHIDEventRef ev) {
-    typedef void (*DispatchFn)(IOHIDEventSystemClientRef, IOHIDEventRef);
-    DispatchFn dispatch = (DispatchFn)YkSym("IOHIDEventSystemClientDispatchEvent");
-    if (dispatch && YkHIDClient() && ev) dispatch(YkHIDClient(), ev);
+    void *d = YkSym("IOHIDEventSystemClientDispatchEvent");
+    if (d && YkHIDClient() && ev)
+        ((void (*)(IOHIDEventSystemClientRef, IOHIDEventRef))d)(YkHIDClient(), ev);
 }
 
-// 单指事件：phase 1=down 2=up 3=move，其余手指抬起
 static void YkFingerEvent(int phase, double x, double y, double pressure, uint64_t ts) {
-    typedef IOHIDEventRef (*SimpleDigitizerFn)(CFAllocatorRef, IOHIDEventRef, double, double,
-                                               uint32_t, uint32_t, uint32_t, uint32_t,
-                                               uint32_t, double, double, double, double,
-                                               uint32_t);
-    SimpleDigitizerFn simple = (SimpleDigitizerFn)YkSym("IOHIDEventCreateDigitizerFingerEvent");
-    if (!simple) return;
-    IOHIDEventRef ev = simple(kCFAllocatorDefault, NULL, ts, x, y, 1, 1, phase, 1, pressure, 1.0, 0.0, 0.0, 0);
-    if (ev) {
-        YkSendEvent(ev);
-        CFRelease(ev);
-    }
+    void *f = YkSym("IOHIDEventCreateDigitizerFingerEvent");
+    if (!f) return;
+    IOHIDEventRef ev = ((IOHIDEventRef (*)(CFAllocatorRef, IOHIDEventRef, double, double,
+                                           uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
+                                           double, double, double, double, uint32_t))f)(
+        kCFAllocatorDefault, NULL, ts, x, y, 1, 1, (uint32_t)phase, 1,
+        pressure, 1.0, 0.0, 0.0, 0);
+    if (ev) { YkSendEvent(ev); CFRelease(ev); }
 }
 
-// 两指事件（捏合/多指）
 static void YkTwoFingerEvent(int phase, double x1, double y1, double x2, double y2, uint64_t ts) {
-    typedef IOHIDEventRef (*FingerFn)(CFAllocatorRef, IOHIDEventRef, double, double,
-                                      uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                                      double, double, double, double, uint32_t);
-    FingerFn fn = (FingerFn)YkSym("IOHIDEventCreateDigitizerFingerEvent");
-    if (!fn) return;
-    IOHIDEventRef e1 = fn(kCFAllocatorDefault, NULL, ts, x1, y1, 1, 1, phase, 1, 1.0, 1.0, 0.0, 0.0, 0);
-    IOHIDEventRef e2 = fn(kCFAllocatorDefault, NULL, ts, x2, y2, 1, 1, phase, 2, 1.0, 1.0, 0.0, 0.0, 0);
+    void *f = YkSym("IOHIDEventCreateDigitizerFingerEvent");
+    if (!f) return;
+    IOHIDEventRef e1 = ((IOHIDEventRef (*)(CFAllocatorRef, IOHIDEventRef, double, double,
+                                           uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
+                                           double, double, double, double, uint32_t))f)(
+        kCFAllocatorDefault, NULL, ts, x1, y1, 1, 1, (uint32_t)phase, 1, 1.0, 1.0, 0.0, 0.0, 0);
+    IOHIDEventRef e2 = ((IOHIDEventRef (*)(CFAllocatorRef, IOHIDEventRef, double, double,
+                                           uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
+                                           double, double, double, double, uint32_t))f)(
+        kCFAllocatorDefault, NULL, ts, x2, y2, 1, 1, (uint32_t)phase, 2, 1.0, 1.0, 0.0, 0.0, 0);
     if (e1) { YkSendEvent(e1); CFRelease(e1); }
     if (e2) { YkSendEvent(e2); CFRelease(e2); }
 }
