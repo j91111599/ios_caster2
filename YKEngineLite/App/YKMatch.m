@@ -76,35 +76,48 @@ NSDictionary *YkMatchTemplate(UIImage *sceneImg, UIImage *tplImg, double thresho
     if (!scene.g || !tpl.g) { YkGrayFree(&scene); YkGrayFree(&tpl); return nil; }
     if (tpl.w > scene.w || tpl.h > scene.h) { YkGrayFree(&scene); YkGrayFree(&tpl); return nil; }
 
-    // 粗搜因子：保证模板下采样后边长 ≥ 4
+    // 粗搜因子：上限 4，避免过度下采样导致定位漂移
     int f = 1;
     int mn = MIN(tpl.w, tpl.h);
-    while (mn / (f * 2) >= 4 && f < 8) f *= 2;
+    while (mn / (f * 2) >= 8 && f < 4) f *= 2;
 
     YkGray sS = YkDownsample(scene, f);
     YkGray tS = YkDownsample(tpl, f);
     if (tS.w < 2 || tS.h < 2) { YkGrayFree(&scene); YkGrayFree(&tpl); YkGrayFree(&sS); YkGrayFree(&tS); return nil; }
 
-    double best = -2; int bx = 0, by = 0;
+    // 粗搜：保留 top-K 候选（含方差过滤）
+    int K = 8;
+    double bestScore[8]; int bestX[8], bestY[8];
+    for (int i = 0; i < K; i++) { bestScore[i] = -2; bestX[i] = 0; bestY[i] = 0; }
+
     int maxX = sS.w - tS.w, maxY = sS.h - tS.h;
     for (int y = 0; y <= maxY; y++) {
         for (int x = 0; x <= maxX; x++) {
             double v = YkZNCC(sS, tS, x, y);
-            if (v > best) { best = v; bx = x; by = y; }
+            if (v <= bestScore[K-1]) continue;
+            // 插入排序到 top-K
+            int pos = K - 1;
+            while (pos > 0 && bestScore[pos-1] < v) {
+                bestScore[pos] = bestScore[pos-1]; bestX[pos] = bestX[pos-1]; bestY[pos] = bestY[pos-1];
+                pos--;
+            }
+            bestScore[pos] = v; bestX[pos] = x; bestY[pos] = y;
         }
     }
     YkGrayFree(&sS); YkGrayFree(&tS);
 
-    // 全分辨率精修（在 ±f 邻域内）
-    int cx = bx * f, cy = by * f;
-    double bestFine = -2; int fx = cx, fy = cy;
-    int lo = -f, hi = f;
-    for (int dy = lo; dy <= hi; dy++) {
-        for (int dx = lo; dx <= hi; dx++) {
-            int nx = cx + dx, ny = cy + dy;
-            if (nx < 0 || ny < 0 || nx + tpl.w > scene.w || ny + tpl.h > scene.h) continue;
-            double v = YkZNCC(scene, tpl, nx, ny);
-            if (v > bestFine) { bestFine = v; fx = nx; fy = ny; }
+    // 对每个候选做全分辨率精修
+    double bestFine = -2; int fx = 0, fy = 0;
+    for (int k = 0; k < K; k++) {
+        if (bestScore[k] <= -2) continue;
+        int cx = bestX[k] * f, cy = bestY[k] * f;
+        for (int dy = -f; dy <= f; dy++) {
+            for (int dx = -f; dx <= f; dx++) {
+                int nx = cx + dx, ny = cy + dy;
+                if (nx < 0 || ny < 0 || nx + tpl.w > scene.w || ny + tpl.h > scene.h) continue;
+                double v = YkZNCC(scene, tpl, nx, ny);
+                if (v > bestFine) { bestFine = v; fx = nx; fy = ny; }
+            }
         }
     }
     YkGrayFree(&scene); YkGrayFree(&tpl);
