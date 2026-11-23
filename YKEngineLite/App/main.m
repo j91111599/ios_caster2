@@ -108,7 +108,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     _table.backgroundColor = YkPageBg();
     _table.tableFooterView = [UIView new];
     _table.translatesAutoresizingMaskIntoConstraints = NO;
-    // [self.view addSubview:_table];  // 旧 UI 已由 YKMainView 取代
+    [self.view addSubview:_table];
     [NSLayoutConstraint activateConstraints:@[
         [_table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [_table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
@@ -191,7 +191,6 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = YkPageBg();
-    self.navigationController.navigationBarHidden = YES;   // 隐藏系统导航栏，避免标题重复
     YKMainView *main = [[YKMainView alloc] initWithFrame:self.view.bounds];
     main.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:main];

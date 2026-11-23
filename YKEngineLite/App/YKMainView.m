@@ -53,7 +53,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
         [self buildScrollAndStack];
         [self buildHeroCard];
         [self buildSegmentControl];
-        // bottomBar 与 segmentControl 重复
+        [self buildBottomBar];
         [self installConstraints];
     }
     return self;
