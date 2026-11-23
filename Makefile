@@ -25,7 +25,7 @@ APPLICATION_NAME = YKEngineApp
 YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngineLite/App/YKScriptScreens.m YKEngineLite/App/YKAppDispatch.m YKEngineLite/App/YKOpenCV.mm YKEngineLite/Compat/YKHTTPServerCompat.m YKEngineLite/Compat/SSZipArchiveCompat.m YKEngineLite/Recovered/YKUtilityModules.m YKEngineLite/Recovered/YKCryptoNetworkModules.m YKEngineLite/Recovered/YKUIModule.m
 YKEngineApp_FRAMEWORKS = UIKit Foundation Network
 YKEngineApp_CFLAGS = -fobjc-arc -Wno-incomplete-umbrella -Wno-documentation -Wno-nullability-completeness -F$(THEOS_PROJECT_DIR)/Frameworks -I$(THEOS_PROJECT_DIR)/Frameworks/opencv2.framework/Headers -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness -IYKEngineLite/Compat -IYKEngineLite/Recovered -Wno-unused-const-variable -Wno-unused-function
-YKEngineApp_LDFLAGS = -fuse-ld=lld -F$(THEOS_PROJECT_DIR)/Frameworks -framework opencv2
+YKEngineApp_LDFLAGS = -fuse-ld=lld -F$(THEOS_PROJECT_DIR)/Frameworks -framework opencv2 -Wl,-undefined,dynamic_lookup
 SWIFT_LIB_DIR = $(shell ls -d $(THEOS)/sdks/iPhoneOS*.sdk/usr/lib/swift 2>/dev/null | head -1)
 YKEngineApp_LDFLAGS += -L$(SWIFT_LIB_DIR) -lswiftCore -lswiftFoundation -lswiftUIKit -lswiftCoreGraphics -lswiftObjectiveC -lswiftDispatch -lswiftMetal -lswiftQuartzCore
 YKEngineApp_CODESIGN_FLAGS = -SYKEngineLite/App/entitlements.plist
