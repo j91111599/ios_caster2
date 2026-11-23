@@ -63,7 +63,6 @@ jobs:
           mkdir -p "$D"
           F=$(find .theos/obj -name "YKSpringTouch.dylib" | head -1)
           if [ -n "$F" ]; then cp "$F" "$D"/ && echo "staged $F"; fi
-          cp YKSpringTouch.plist "$D"/ || true
           ls -la "$D"
 
       - name: Build (rootless)
