@@ -9,29 +9,22 @@
 #import <sys/un.h>
 #import <unistd.h>
 
-// 优先走 SpringBoard tweak 的 socket（真正能注入）
-static NSDictionary *YkSocketSend(NSDictionary *req) {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return nil;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, "/private/preboot/yk_touch.sock", sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return nil; }
+// 走 SpringBoard tweak 的 CFMessagePort（内核跨进程，不依赖文件路径）
+static NSDictionary *YkPortSend(NSDictionary *req) {
+    static CFMessagePortRef remote = NULL;
+    static BOOL tried = NO;
+    if (!tried) { tried = YES; remote = CFMessagePortCreateRemote(kCFAllocatorDefault, CFSTR("com.yk.touch")); }
+    if (!remote) return nil;
     NSData *body = [NSJSONSerialization dataWithJSONObject:req options:0 error:NULL];
-    NSMutableData *md = [NSMutableData dataWithData:body ?: [NSData data]];
-    [md appendBytes:"\n" length:1];
-    write(fd, md.bytes, md.length);
-    char buf[1024] = {0};
-    ssize_t n = read(fd, buf, sizeof(buf) - 1);
-    close(fd);
-    if (n <= 0) return nil;
-    NSData *rd = [NSData dataWithBytes:buf length:(NSUInteger)n];
-    id obj = [NSJSONSerialization JSONObjectWithData:rd options:0 error:NULL];
-    return [obj isKindOfClass:[NSDictionary class]] ? obj : nil;
+    if (!body) return nil;
+    CFDataRef reply = NULL;
+    SInt32 st = CFMessagePortSendRequest(remote, 1, (__bridge CFDataRef)body, 2.0, 2.0,
+                                         kCFRunLoopDefaultMode, &reply);
+    if (st != kCFMessagePortSuccess || !reply) return nil;
+    NSDictionary *out = [NSJSONSerialization JSONObjectWithData:(__bridge NSData *)reply options:0 error:NULL];
+    CFRelease(reply);
+    return [out isKindOfClass:[NSDictionary class]] ? out : nil;
 }
-
-typedef struct __IOHIDEvent *IOHIDEventRef;
-typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
 
 static IOHIDEventSystemClientRef gHIDClient = NULL;
 
@@ -92,7 +85,7 @@ static uint64_t YkNow(void) {
 }
 
 NSDictionary *YkTouchTap(double x, double y) {
-    NSDictionary *r = YkSocketSend(@{ @"action": @"tap", @"x": @(x), @"y": @(y) });
+    NSDictionary *r = YkPortSend(@{ @"action": @"tap", @"x": @(x), @"y": @(y) });
     if (r) return @{ @"value": r };
     YkFingerEvent(1, x, y, 1.0, YkNow());
     usleep(30000);
@@ -101,7 +94,7 @@ NSDictionary *YkTouchTap(double x, double y) {
 }
 
 NSDictionary *YkTouchLongPress(double x, double y, double durationSec) {
-    NSDictionary *r = YkSocketSend(@{ @"action": @"longPress", @"x": @(x), @"y": @(y), @"duration": @(durationSec) });
+    NSDictionary *r = YkPortSend(@{ @"action": @"longPress", @"x": @(x), @"y": @(y), @"duration": @(durationSec) });
     if (r) return @{ @"value": r };
     YkFingerEvent(1, x, y, 1.0, YkNow());
     usleep((useconds_t)(durationSec * 1000000));
@@ -114,7 +107,7 @@ NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2,
                            double durationSec, NSInteger steps)
 {
     if (steps <= 0) steps = 12;
-    NSDictionary *r = YkSocketSend(@{ @"action": @"swipe", @"x": @(x1), @"y": @(y1),
+    NSDictionary *r = YkPortSend(@{ @"action": @"swipe", @"x": @(x1), @"y": @(y1),
                                       @"toX": @(x2), @"toY": @(y2),
                                       @"duration": @(durationSec), @"steps": @(steps) });
     if (r) return @{ @"value": r };
@@ -137,7 +130,7 @@ NSDictionary *YkTouchMulti(int fingers, double x1, double y1, double x2, double 
                            double durationSec)
 {
     if (fingers < 2) return YkTouchTap(x1, y1);
-    NSDictionary *rs = YkSocketSend(@{ @"action": @"multi", @"x": @(x1), @"y": @(y1),
+    NSDictionary *rs = YkPortSend(@{ @"action": @"multi", @"x": @(x1), @"y": @(y1),
                                        @"x2": @(x2), @"y2": @(y2), @"duration": @(durationSec) });
     if (rs) return @{ @"value": rs };
     YkTwoFingerEvent(1, x1, y1, x2, y2, YkNow());
@@ -149,7 +142,7 @@ NSDictionary *YkTouchMulti(int fingers, double x1, double y1, double x2, double 
 }
 
 NSDictionary *YkTouchPing(void) {
-    NSDictionary *r = YkSocketSend(@{ @"action": @"ping" });
+    NSDictionary *r = YkPortSend(@{ @"action": @"ping" });
     if (r) return @{ @"value": r };
     return @{ @"value": @{ @"ok": @NO, @"reason": @"socket 不可用（tweak 未加载）" } };
 }

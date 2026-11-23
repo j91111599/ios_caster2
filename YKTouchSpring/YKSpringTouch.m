@@ -134,37 +134,25 @@ static NSData *HandleLine(NSString *line) {
     return md;
 }
 
-static void *ServerMain(void *arg) {
-    const char *path = "/private/preboot/yk_touch.sock";
-    unlink(path);
-    int srv = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (srv < 0) return NULL;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-    if (bind(srv, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(srv); return NULL; }
-    chmod(path, 0666);
-    listen(srv, 8);
-
-    for (;;) {
-        int cli = accept(srv, NULL, NULL);
-        if (cli < 0) continue;
-        char buf[2048] = {0};
-        ssize_t n = read(cli, buf, sizeof(buf) - 1);
-        if (n > 0) {
-            NSString *line = [[NSString stringWithUTF8String:buf]
-                              stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-            NSData *resp = HandleLine(line);
-            write(cli, resp.bytes, resp.length);
-        }
-        close(cli);
+static CFDataRef PortCallback(CFMessagePortRef port, SInt32 msgid, CFDataRef data, void *info) {
+    NSString *line = @"{}";
+    if (data && CFDataGetLength(data) > 0) {
+        NSData *d = (__bridge NSData *)data;
+        line = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] ?: @"{}";
     }
-    return NULL;
+    NSData *resp = HandleLine(line);
+    return (__bridge_retained CFDataRef)resp;
 }
 
 __attribute__((constructor))
 static void YKSpringTouchInit(void) {
-    pthread_t th;
-    pthread_create(&th, NULL, ServerMain, NULL);
-    pthread_detach(th);
+    CFMessagePortRef local = CFMessagePortCreateLocal(kCFAllocatorDefault,
+                                                      CFSTR("com.yk.touch"),
+                                                      PortCallback, NULL, NULL);
+    if (!local) return;
+    CFRunLoopSourceRef src = CFMessagePortCreateRunLoopSource(kCFAllocatorDefault, local, 0);
+    if (src) {
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), src, kCFRunLoopCommonModes);
+        CFRelease(src);
+    }
 }
