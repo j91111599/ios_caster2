@@ -26,6 +26,9 @@ static NSDictionary *YkPortSend(NSDictionary *req) {
     return [out isKindOfClass:[NSDictionary class]] ? out : nil;
 }
 
+typedef struct __IOHIDEvent *IOHIDEventRef;
+typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
+
 static IOHIDEventSystemClientRef gHIDClient = NULL;
 
 static void *YkSym(const char *name) {
