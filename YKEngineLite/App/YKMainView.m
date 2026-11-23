@@ -42,6 +42,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 @property (nonatomic, strong) UIView *heroCard;
 @property (nonatomic, strong) UISegmentedControl *segmentControl;
 @property (nonatomic, strong) UIView *bottomBar;
+@property (nonatomic, strong) UILabel *pageLabel;
 @end
 
 @implementation YKMainView
@@ -247,6 +248,14 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
     _segmentControl.translatesAutoresizingMaskIntoConstraints = NO;
     [_contentStack addArrangedSubview:_segmentControl];
     [_segmentControl.heightAnchor constraintEqualToConstant:kRowBase].active = YES;
+    [_segmentControl addTarget:self action:@selector(ykSegChanged:)
+              forControlEvents:UIControlEventValueChanged];
+    _pageLabel = [UILabel new];
+    _pageLabel.text = @"设备页 · 本机引擎 65324";
+    _pageLabel.font = [UIFont systemFontOfSize:14];
+    _pageLabel.textColor = [UIColor secondaryLabelColor];
+    _pageLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [_contentStack addArrangedSubview:_pageLabel];
 }
 
 #pragma mark - bottomBar（反编译 bottomBar）
@@ -339,3 +348,9 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 }
 
 @end
+
+- (void)ykSegChanged:(UISegmentedControl *)sc {
+    NSArray *names = @[@"设备页 · 本机引擎 65324", @"脚本页 · /executor/scripts", @"录制页 · /record/tasks"];
+    NSInteger i = sc.selectedSegmentIndex;
+    if (i >= 0 && i < (NSInteger)names.count) _pageLabel.text = names[i];
+}

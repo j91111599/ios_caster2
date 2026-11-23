@@ -707,7 +707,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     nav.navigationBar.shadowImage = [UIImage new];
     nav.navigationBar.titleTextAttributes = @{ NSForegroundColorAttributeName: [UIColor whiteColor],
                                                NSFontAttributeName: [UIFont boldSystemFontOfSize:24] };
-    root.navigationItem.title = @"远控 Pro";
+    root.navigationItem.title = @"";  // 标题由 YKMainView.headerView 负责，避免重复
     UIBarButtonItem *home = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"house.fill"]
                                                             style:UIBarButtonItemStylePlain
                                                            target:nil action:nil];
