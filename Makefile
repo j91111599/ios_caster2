@@ -35,7 +35,7 @@ TWEAK_NAME = YKSpringTouch
 YKSpringTouch_FILES = YKTouchSpring/YKSpringTouch.m
 YKSpringTouch_FRAMEWORKS = Foundation UIKit
 YKSpringTouch_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable
-YKSpringTouch_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
+YKSpringTouch_INSTALL_PATH = /usr/lib/TweakInject
 YKSpringTouch_LDFLAGS = -fuse-ld=lld -Wl,-undefined,dynamic_lookup
 
 include $(THEOS_MAKE_PATH)/application.mk
