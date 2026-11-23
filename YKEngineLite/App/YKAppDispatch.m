@@ -94,6 +94,27 @@ static NSString *YkUUID40(void) {
     return o;
 }
 
+
+// ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
+static NSMutableDictionary *gImages = nil;
+
+static NSString *YkNewImageId(UIImage *img) {
+    if (!gImages) gImages = [NSMutableDictionary dictionary];
+    NSString *iid = [[NSUUID UUID] UUIDString];
+    gImages[iid] = img;
+    return iid;
+}
+static UIImage *YkGetImage(NSString *iid) { return iid ? gImages[iid] : nil; }
+
+static NSDictionary *YkImageInfo(UIImage *img, NSString *iid) {
+    if (!img) return nil;
+    CGImageRef cg = img.CGImage;
+    return @{ @"value": @{ @"imageId": iid,
+                           @"width": @(CGImageGetWidth(cg)),
+                           @"height": @(CGImageGetHeight(cg)),
+                           @"bytesPerRow": @(CGImageGetBytesPerRow(cg)),
+                           @"scale": @(img.scale) } };
+}
 static NSDictionary *YKErr(NSString *code, NSString *msg) {
     return @{ @"value": @{ @"error": code, @"message": msg ?: @"" } };
 }
@@ -211,6 +232,145 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
                                    @"locale": YkLocaleJSON() } };
         }
         return YKErr(@"not_found", verb);
+    }
+
+
+    // ---- image（CoreGraphics 子集）----
+    if ([head isEqualToString:@"image"]) {
+        NSString *verb = seg.count > 1 ? seg[1] : @"info";
+        NSString *iid = body[@"imageId"] ?: query[@"imageId"];
+
+        if ([verb isEqualToString:@"create"]) {
+            CGFloat w = [body[@"width"] doubleValue] ?: 100, h = [body[@"height"] doubleValue] ?: 100;
+            UIGraphicsBeginImageContext(CGSizeMake(w, h));
+            UIColor *c = [UIColor whiteColor];
+            if ([body[@"color"] isKindOfClass:[NSString class]]) {
+                NSString *hex = [body[@"color"] stringByReplacingOccurrencesOfString:@"#" withString:@""];
+                unsigned int v = 0; NSScanner *sc = [NSScanner scannerWithString:hex];
+                if ([sc scanHexInt:&v]) {
+                    c = [UIColor colorWithRed:((v>>16)&0xFF)/255.0 green:((v>>8)&0xFF)/255.0
+                                        blue:(v&0xFF)/255.0 alpha:1];
+                }
+            }
+            [c setFill]; UIRectFill(CGRectMake(0,0,w,h));
+            UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+            NSString *nid = YkNewImageId(img);
+            return YkImageInfo(img, nid);
+        }
+
+        if ([verb isEqualToString:@"info"]) return YkImageInfo(YkGetImage(iid), iid) ?: YKErr(@"not_found", @"imageId");
+
+        if ([verb isEqualToString:@"capture"]) {
+            CGSize sz = [UIScreen mainScreen].bounds.size;
+            UIGraphicsBeginImageContextWithOptions(sz, NO, 0);
+            UIWindow *w = UIApplication.sharedApplication.keyWindow ?: UIApplication.sharedApplication.windows.firstObject;
+            [w drawViewHierarchyInRect:CGRectMake(0,0,sz.width,sz.height) afterScreenUpdates:NO];
+            UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+            NSString *nid = YkNewImageId(img);
+            return YkImageInfo(img, nid);
+        }
+
+        UIImage *src = YkGetImage(iid);
+
+        if ([verb isEqualToString:@"getPixel"]) {
+            if (!src) return YKErr(@"not_found", @"imageId");
+            NSInteger x = [body[@"x"] integerValue], y = [body[@"y"] integerValue];
+            CGImageRef cg = src.CGImage;
+            if (x < 0 || y < 0 || x >= CGImageGetWidth(cg) || y >= CGImageGetHeight(cg))
+                return YKErr(@"invalid argument", @"坐标越界");
+            unsigned char px[4] = {0};
+            CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+            CGContextRef ctx = CGBitmapContextCreate(px, 1, 1, 8, 4, cs, kCGImageAlphaPremultipliedLast);
+            CGContextDrawImage(ctx, CGRectMake(-x, -y, CGImageGetWidth(cg), CGImageGetHeight(cg)), cg);
+            CGContextRelease(ctx); CGColorSpaceRelease(cs);
+            return @{ @"value": @{ @"r": @(px[0]), @"g": @(px[1]), @"b": @(px[2]), @"a": @(px[3]),
+                                   @"rgb": @((px[0]<<16)|(px[1]<<8)|px[2]) } };
+        }
+
+        if ([verb isEqualToString:@"colorToRGB"]) {
+            NSString *hex = [body[@"color"] ?: @"" stringByReplacingOccurrencesOfString:@"#" withString:@""];
+            unsigned int v = 0; NSScanner *sc = [NSScanner scannerWithString:hex];
+            [sc scanHexInt:&v];
+            return @{ @"value": @{ @"r": @((v>>16)&0xFF), @"g": @((v>>8)&0xFF), @"b": @(v&0xFF), @"a": @255,
+                                   @"hex": [NSString stringWithFormat:@"#%06X", v & 0xFFFFFF] } };
+        }
+
+        if ([verb isEqualToString:@"crop"] || [verb isEqualToString:@"resize"] || [verb isEqualToString:@"rotate"]) {
+            if (!src) return YKErr(@"not_found", @"imageId");
+            CGSize out;
+            CGRect drawRect;
+            CGImageRef cg = src.CGImage;
+            CGFloat W = CGImageGetWidth(cg), H = CGImageGetHeight(cg);
+            if ([verb isEqualToString:@"crop"]) {
+                CGFloat x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+                CGFloat w = [body[@"width"] doubleValue] ?: W, h = [body[@"height"] doubleValue] ?: H;
+                CGImageRef sub = CGImageCreateWithImageInRect(cg, CGRectMake(x, y, w, h));
+                if (!sub) return YKErr(@"invalid argument", @"裁剪区域无效");
+                UIImage *img = [UIImage imageWithCGImage:sub scale:src.scale orientation:src.imageOrientation];
+                CGImageRelease(sub);
+                NSString *nid = YkNewImageId(img);
+                return YkImageInfo(img, nid);
+            }
+            if ([verb isEqualToString:@"resize"]) {
+                out = CGSizeMake([body[@"width"] doubleValue] ?: W, [body[@"height"] doubleValue] ?: H);
+            } else {
+                CGFloat deg = [body[@"degrees"] doubleValue] ?: 90;
+                BOOL r = fabs(fmod(deg, 180.0)) == 90.0;
+                out = r ? CGSizeMake(H, W) : CGSizeMake(W, H);
+            }
+            UIGraphicsBeginImageContext(out);
+            CGContextRef ctx = UIGraphicsGetCurrentContext();
+            if ([verb isEqualToString:@"rotate"]) {
+                CGFloat deg = [body[@"degrees"] doubleValue] ?: 90;
+                CGContextTranslateCTM(ctx, out.width/2, out.height/2);
+                CGContextRotateCTM(ctx, deg * M_PI / 180.0);
+                CGContextTranslateCTM(ctx, -W/2, -H/2);
+                drawRect = CGRectMake(0, 0, W, H);
+            } else {
+                drawRect = CGRectMake(0, 0, out.width, out.height);
+            }
+            CGContextDrawImage(ctx, drawRect, cg);
+            UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+            NSString *nid = YkNewImageId(img);
+            return YkImageInfo(img, nid);
+        }
+
+        if ([verb isEqualToString:@"toBase64"] || [verb isEqualToString:@"save"]) {
+            if (!src) return YKErr(@"not_found", @"imageId");
+            NSData *png = UIImagePNGRepresentation(src);
+            if ([verb isEqualToString:@"toBase64"])
+                return @{ @"value": @{ @"encoding": @"base64",
+                                        @"data": [png base64EncodedStringWithOptions:0],
+                                        @"size": @(png.length) } };
+            NSString *to = body[@"path"];
+            if (!to.length) return YKErr(@"invalid argument", @"缺少 path");
+            BOOL ok = [png writeToFile:to atomically:YES];
+            return @{ @"value": @(ok) };
+        }
+
+        if ([verb isEqualToString:@"release"]) {
+            if (iid) [gImages removeObjectForKey:iid];
+            return @{ @"value": @YES };
+        }
+        if ([verb isEqualToString:@"loadBase64"]) {
+            NSData *d = [[NSData alloc] initWithBase64EncodedString:body[@"data"] ?: @"" options:0];
+            UIImage *img = d ? [UIImage imageWithData:d] : nil;
+            if (!img) return YKErr(@"invalid argument", @"不是合法图片");
+            NSString *nid = YkNewImageId(img);
+            return YkImageInfo(img, nid);
+        }
+        if ([verb isEqualToString:@"load"]) {
+            UIImage *img = [UIImage imageWithContentsOfFile:body[@"path"] ?: @""];
+            if (!img) return YKErr(@"not_found", @"文件不可读");
+            NSString *nid = YkNewImageId(img);
+            return YkImageInfo(img, nid);
+        }
+        if ([verb isEqualToString:@"releaseAll"]) { [gImages removeAllObjects]; return @{ @"value": @YES }; }
+        if ([verb isEqualToString:@"activeCount"]) return @{ @"value": @(gImages.count) };
+        return YKErr(@"not_ported", [NSString stringWithFormat:@"image/%@ 需要 OpenCV", verb]);
     }
 
     return YKErr(@"not_found", path);
