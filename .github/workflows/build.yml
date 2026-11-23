@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           make clean || true
-          make package THEOS_PACKAGE_SCHEME=rootless THEOS_PACKAGE_ARCH=iphoneos-arm64e FINALPACKAGE=1 DEBUG=0 2>&1 | tail -60
+          make package THEOS_PACKAGE_ARCH=iphoneos-arm64e FINALPACKAGE=1 DEBUG=0 2>&1 | tail -60
           ls -la packages/ || true
 
       - name: Upload artifact
