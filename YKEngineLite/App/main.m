@@ -108,7 +108,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     _table.backgroundColor = YkPageBg();
     _table.tableFooterView = [UIView new];
     _table.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:_table];
+    // 旧 UITableView 与 YKMainView 重复，不加入视图
     [NSLayoutConstraint activateConstraints:@[
         [_table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [_table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
