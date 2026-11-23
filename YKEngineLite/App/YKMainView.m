@@ -359,8 +359,6 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
     return box;
 }
 
-@end
-
 #pragma mark - 三页内容（设备 / 脚本 / 录制）
 
 - (UILabel *)ykLine:(NSString *)text size:(CGFloat)sz bold:(BOOL)b color:(UIColor *)c {
@@ -461,3 +459,5 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
         }
     }
 }
+
+@end
