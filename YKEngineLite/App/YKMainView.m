@@ -42,6 +42,10 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 @property (nonatomic, strong) UIView *heroCard;
 @property (nonatomic, strong) UISegmentedControl *segmentControl;
 @property (nonatomic, strong) UIView *bottomBar;
+@property (nonatomic, strong) UIView *pageHost;
+@property (nonatomic, strong) NSMutableArray<UIView *> *pages;
+@property (nonatomic, strong) UIView *pageHost;
+@property (nonatomic, strong) NSMutableArray<UIView *> *pages;
 @end
 
 @implementation YKMainView
@@ -53,7 +57,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
         [self buildScrollAndStack];
         [self buildHeroCard];
         [self buildSegmentControl];
-        [self buildBottomBar];
+        // bottomBar 与 segmentControl 功能重复，已移除
         [self installConstraints];
     }
     return self;
@@ -247,6 +251,14 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
     _segmentControl.translatesAutoresizingMaskIntoConstraints = NO;
     [_contentStack addArrangedSubview:_segmentControl];
     [_segmentControl.heightAnchor constraintEqualToConstant:kRowBase].active = YES;
+    [_segmentControl addTarget:self action:@selector(ykSegmentChanged:)
+              forControlEvents:UIControlEventValueChanged];
+    // 三页容器（默认显示设备页）
+    _pageHost = [UIView new];
+    _pageHost.translatesAutoresizingMaskIntoConstraints = NO;
+    [_contentStack addArrangedSubview:_pageHost];
+    [_pageHost.heightAnchor constraintEqualToConstant:220.0].active = YES;
+    [self ykBuildPages];
 }
 
 #pragma mark - bottomBar（反编译 bottomBar）
@@ -339,3 +351,104 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 }
 
 @end
+
+#pragma mark - 三页内容（设备 / 脚本 / 录制）
+
+- (UILabel *)ykLine:(NSString *)text size:(CGFloat)sz bold:(BOOL)b color:(UIColor *)c {
+    UILabel *l = [UILabel new];
+    l.text = text;
+    l.font = b ? [UIFont boldSystemFontOfSize:sz] : [UIFont systemFontOfSize:sz];
+    l.textColor = c ?: [UIColor labelColor];
+    l.numberOfLines = 0;
+    l.translatesAutoresizingMaskIntoConstraints = NO;
+    return l;
+}
+
+- (UIView *)ykPageWithTitle:(NSString *)title body:(NSString *)body {
+    UIView *v = [UIView new];
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    v.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    v.layer.cornerRadius = 16.0;
+    UILabel *t = [self ykLine:title size:16 bold:YES color:nil];
+    UILabel *b = [self ykLine:body size:13 bold:NO color:[UIColor secondaryLabelColor]];
+    [v addSubview:t]; [v addSubview:b];
+    [NSLayoutConstraint activateConstraints:@[
+        [t.topAnchor constraintEqualToAnchor:v.topAnchor constant:16],
+        [t.leadingAnchor constraintEqualToAnchor:v.leadingAnchor constant:16],
+        [t.trailingAnchor constraintEqualToAnchor:v.trailingAnchor constant:-16],
+        [b.topAnchor constraintEqualToAnchor:t.bottomAnchor constant:8],
+        [b.leadingAnchor constraintEqualToAnchor:t.leadingAnchor],
+        [b.trailingAnchor constraintEqualToAnchor:t.trailingAnchor],
+    ]];
+    return v;
+}
+
+- (void)ykBuildPages {
+    if (!_pages) _pages = [NSMutableArray array];
+    NSArray *titles = @[@"设备", @"脚本", @"录制"];
+    NSArray *bodies = @[@"本机引擎 65324 · 局域网待接入",
+                        @"脚本列表（来自 /executor/scripts）",
+                        @"录制任务（来自 /record/tasks）"];
+    for (NSInteger i = 0; i < 3; i++) {
+        UIView *pg = [self ykPageWithTitle:titles[i] body:bodies[i]];
+        pg.hidden = (i != 0);
+        [_pageHost addSubview:pg];
+        [NSLayoutConstraint activateConstraints:@[
+            [pg.topAnchor constraintEqualToAnchor:_pageHost.topAnchor],
+            [pg.leadingAnchor constraintEqualToAnchor:_pageHost.leadingAnchor],
+            [pg.trailingAnchor constraintEqualToAnchor:_pageHost.trailingAnchor],
+            [pg.bottomAnchor constraintEqualToAnchor:_pageHost.bottomAnchor],
+        ]];
+        [_pages addObject:pg];
+    }
+    [self ykLoadScripts];
+    [self ykLoadRecords];
+}
+
+- (void)ykSegmentChanged:(UISegmentedControl *)sc {
+    for (NSInteger i = 0; i < _pages.count; i++) _pages[i].hidden = (i != sc.selectedSegmentIndex);
+    if (sc.selectedSegmentIndex == 1) [self ykLoadScripts];
+    if (sc.selectedSegmentIndex == 2) [self ykLoadRecords];
+}
+
+- (void)ykFetch:(NSString *)path done:(void (^)(NSDictionary *))done {
+    NSURL *u = [NSURL URLWithString:[@"http://127.0.0.1:65324" stringByAppendingString:path]];
+    NSURLSessionDataTask *t = [[NSURLSession sharedSession] dataTaskWithURL:u
+        completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+            NSDictionary *j = nil;
+            if (d) j = [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL];
+            dispatch_async(dispatch_get_main_queue(), ^{ if (done) done(j); });
+    }];
+    [t resume];
+}
+
+- (void)ykLoadScripts {
+    [self ykFetch:@"/executor/scripts" done:^(NSDictionary *j) {
+        NSArray *list = j[@"value"][@"scripts"];
+        NSString *body = list.count ? [NSString stringWithFormat:@"共 %lu 个脚本\n%@",
+                                       (unsigned long)list.count,
+                                       [[list valueForKey:@"name"] componentsJoinedByString:@"\n"]]
+                                    : @"暂无脚本（引擎已就绪，等待下发）";
+        [self ykSetBody:1 text:body];
+    }];
+}
+
+- (void)ykLoadRecords {
+    [self ykFetch:@"/record/tasks" done:^(NSDictionary *j) {
+        NSArray *list = j[@"value"][@"tasks"];
+        NSString *body = list.count ? [NSString stringWithFormat:@"共 %lu 个任务", (unsigned long)list.count]
+                                    : @"暂无录制任务";
+        [self ykSetBody:2 text:body];
+    }];
+}
+
+- (void)ykSetBody:(NSInteger)idx text:(NSString *)txt {
+    if (idx >= (NSInteger)_pages.count) return;
+    UIView *pg = _pages[idx];
+    for (UIView *sub in pg.subviews) {
+        if ([sub isKindOfClass:[UILabel class]] && ((UILabel *)sub).font.pointSize < 15) {
+            ((UILabel *)sub).text = txt;
+            break;
+        }
+    }
+}
