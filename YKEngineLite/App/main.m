@@ -11,6 +11,7 @@
 #import <UIKit/UIKit.h>
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
+NSDictionary *YKAppDispatchPath(NSString *method, NSString *path, NSDictionary *body, NSDictionary *query);
 @interface YKMainView : UIView
 @end
 #import <ifaddrs.h>
@@ -558,6 +559,13 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     }];
     [_srv get:@"/record/tasks" withBlock:^(RouteRequest *req, RouteResponse *res) {
         [res respondWithJSON:@{ @"value": @{ @"tasks": gRecords ?: @[], @"count": @(gRecords.count) } }];
+    }];
+    [_srv setDefaultHandler:^(RouteRequest *req, RouteResponse *res) {
+        NSDictionary *out = YKAppDispatchPath(req.method, req.path,
+                                              [req jsonBody] ?: @{}, req.query);
+        id inner = out[@"value"];
+        if ([inner isKindOfClass:[NSDictionary class]] && inner[@"error"]) res.statusCode = 400;
+        [res respondWithJSON:out];
     }];
     NSError *err = nil;
     BOOL ok = [_srv start:&err];
