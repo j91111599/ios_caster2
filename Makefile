@@ -24,7 +24,7 @@ include $(THEOS_MAKE_PATH)/tool.mk
 APPLICATION_NAME = YKEngineApp
 YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngineLite/App/YKScriptScreens.m YKEngineLite/App/YKAppDispatch.m YKEngineLite/App/YKOpenCV.mm YKEngineLite/Compat/YKHTTPServerCompat.m YKEngineLite/Compat/SSZipArchiveCompat.m YKEngineLite/Recovered/YKUtilityModules.m YKEngineLite/Recovered/YKCryptoNetworkModules.m YKEngineLite/Recovered/YKUIModule.m
 YKEngineApp_FRAMEWORKS = UIKit Foundation Network
-YKEngineApp_CFLAGS = -fobjc-arc -F$(THEOS_PROJECT_DIR)/Frameworks -I$(THEOS_PROJECT_DIR)/Frameworks/opencv2.framework/Headers -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness -IYKEngineLite/Compat -IYKEngineLite/Recovered -Wno-unused-const-variable -Wno-unused-function
+YKEngineApp_CFLAGS = -fobjc-arc -Wno-incomplete-umbrella -Wno-documentation -Wno-nullability-completeness -F$(THEOS_PROJECT_DIR)/Frameworks -I$(THEOS_PROJECT_DIR)/Frameworks/opencv2.framework/Headers -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness -IYKEngineLite/Compat -IYKEngineLite/Recovered -Wno-unused-const-variable -Wno-unused-function
 YKEngineApp_LDFLAGS = -fuse-ld=lld -F$(THEOS_PROJECT_DIR)/Frameworks -framework opencv2
 YKEngineApp_CODESIGN_FLAGS = -SYKEngineLite/App/entitlements.plist
 YKEngineApp_INSTALL_PATH = /Applications
