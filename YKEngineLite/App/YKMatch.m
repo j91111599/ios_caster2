@@ -171,7 +171,7 @@ NSDictionary *YkMatchTemplate(UIImage *sceneImg, UIImage *tplImg, double thresho
               @"centerY": @(fy + tplImg.size.height * tplImg.scale / 2) };
 }
 
-// 多目标匹配：粗搜取所有超过阈值的点 → 距离 NMS → 逐个精修
+// 多目标匹配：粗搜收集全部候选 → 按分数降序 → 距离 NMS → 逐个精修
 NSArray *YkMatchTemplateAll(UIImage *sceneImg, UIImage *tplImg, double threshold, NSInteger maxResults)
 {
     if (!sceneImg || !tplImg) return @[];
@@ -189,35 +189,52 @@ NSArray *YkMatchTemplateAll(UIImage *sceneImg, UIImage *tplImg, double threshold
     NSMutableArray *out = [NSMutableArray array];
     if (tS.w >= 2 && tS.h >= 2) {
         NSInteger limit = maxResults > 0 ? maxResults : 20;
-        int minDist = MAX(tS.w, tS.h);
-        for (int y = 0; y <= sS.h - tS.h && (NSInteger)out.count < limit; y++) {
+
+        // 步骤 1：收集所有超过阈值的候选
+        NSMutableArray *cands = [NSMutableArray array];
+        for (int y = 0; y <= sS.h - tS.h; y++) {
             for (int x = 0; x <= sS.w - tS.w; x++) {
                 double v = YkZNCC(sS, tS, x, y);
                 if (v < threshold) continue;
-                BOOL dup = NO;
-                for (NSDictionary *h in out) {
-                    int hx = [h[@"x"] intValue] / f, hy = [h[@"y"] intValue] / f;
-                    if (abs(hx - x) < minDist && abs(hy - y) < minDist) { dup = YES; break; }
+                [cands addObject:@{ @"x": @(x), @"y": @(y), @"s": @(v) }];
+            }
+        }
+        // 步骤 2：按分数降序
+        [cands sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+            double va = [a[@"s"] doubleValue], vb = [b[@"s"] doubleValue];
+            if (va > vb) return NSOrderedAscending;
+            if (va < vb) return NSOrderedDescending;
+            return NSOrderedSame;
+        }];
+
+        // 步骤 3：距离 NMS + 全分辨率精修
+        int minDist = MAX(tS.w, tS.h);
+        for (NSDictionary *c in cands) {
+            if ((NSInteger)out.count >= limit) break;
+            int cx0 = [c[@"x"] intValue], cy0 = [c[@"y"] intValue];
+            BOOL dup = NO;
+            for (NSDictionary *h in out) {
+                int hx = [h[@"x"] intValue] / f, hy = [h[@"y"] intValue] / f;
+                if (abs(hx - cx0) < minDist && abs(hy - cy0) < minDist) { dup = YES; break; }
+            }
+            if (dup) continue;
+
+            int cx = cx0 * f, cy = cy0 * f;
+            double bestV = [c[@"s"] doubleValue]; int bx = cx, by = cy;
+            for (int dy = -f; dy <= f; dy++) {
+                for (int dx = -f; dx <= f; dx++) {
+                    int nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx + tpl.w > scene.w || ny + tpl.h > scene.h) continue;
+                    double vv = YkZNCC(scene, tpl, nx, ny);
+                    if (vv > bestV) { bestV = vv; bx = nx; by = ny; }
                 }
-                if (dup) continue;
-                int cx = x * f, cy = y * f;
-                double bestV = v; int bx = cx, by = cy;
-                for (int dy = -f; dy <= f; dy++) {
-                    for (int dx = -f; dx <= f; dx++) {
-                        int nx = cx + dx, ny = cy + dy;
-                        if (nx < 0 || ny < 0 || nx + tpl.w > scene.w || ny + tpl.h > scene.h) continue;
-                        double vv = YkZNCC(scene, tpl, nx, ny);
-                        if (vv > bestV) { bestV = vv; bx = nx; by = ny; }
-                    }
-                }
-                if (bestV >= threshold) {
-                    [out addObject:@{ @"x": @(bx), @"y": @(by),
-                                      @"width": @(tpl.w), @"height": @(tpl.h),
-                                      @"score": @(bestV),
-                                      @"centerX": @(bx + tpl.w / 2),
-                                      @"centerY": @(by + tpl.h / 2) }];
-                }
-                if ((NSInteger)out.count >= limit) break;
+            }
+            if (bestV >= threshold) {
+                [out addObject:@{ @"x": @(bx), @"y": @(by),
+                                  @"width": @(tpl.w), @"height": @(tpl.h),
+                                  @"score": @(bestV),
+                                  @"centerX": @(bx + tpl.w / 2),
+                                  @"centerY": @(by + tpl.h / 2) }];
             }
         }
     }
