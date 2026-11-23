@@ -30,16 +30,6 @@ YKEngineApp_CODESIGN_FLAGS = -SYKEngineLite/App/entitlements.plist
 YKEngineApp_INSTALL_PATH = /Applications
 YKEngineApp_INFO_PLIST = YKEngineLite/App/Info.plist
 YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources/AppIcon60x60@2x.png YKEngineLite/App/Info.plist
-# ---------- SpringBoard 触控注入 ----------
-TWEAK_NAME = YKSpringTouch
-YKSpringTouch_FILES = YKTouchSpring/YKSpringTouch.m
-YKSpringTouch_FRAMEWORKS = Foundation UIKit
-YKSpringTouch_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable
-YKSpringTouch_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
-YKSpringTouch_LDFLAGS = -fuse-ld=lld -Wl,-undefined,dynamic_lookup
-
-include $(THEOS_MAKE_PATH)/application.mk
-include $(THEOS_MAKE_PATH)/tweak.mk
 
 after-install::
 	install.exec "killall -9 ykenginelite 2>/dev/null; launchctl unload /var/containers/Bundle/Application/.jbroot-*/Library/LaunchDaemons/com.yk.enginelite.plist 2>/dev/null; uicache -a"
