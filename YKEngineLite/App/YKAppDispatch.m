@@ -155,6 +155,57 @@ static int YkHexColor(id v) {
     if (![sc scanHexInt:&n]) return -1;
     return (int)(n & 0xFFFFFF);
 }
+
+// 视图树转 JSON（自检用）
+static NSDictionary *YkDumpView(UIView *v, int depth) {
+    if (!v || depth > 14) return nil;
+    NSMutableDictionary *d = [NSMutableDictionary dictionary];
+    d[@"cls"] = NSStringFromClass([v class]);
+    d[@"frame"] = NSStringFromCGRect(v.frame);
+    if ([v isKindOfClass:[UILabel class]]) {
+        UILabel *l = (UILabel *)v;
+        if (l.text.length) d[@"text"] = l.text;
+        d[@"font"] = @(l.font.pointSize);
+    }
+    if ([v isKindOfClass:[UIButton class]]) {
+        NSString *t = [((UIButton *)v) titleForState:UIControlStateNormal];
+        if (t.length) d[@"title"] = t;
+    }
+    if ([v isKindOfClass:[UISegmentedControl class]]) {
+        UISegmentedControl *sc = (UISegmentedControl *)v;
+        d[@"selected"] = @(sc.selectedSegmentIndex);
+        d[@"items"] = @(sc.numberOfSegments);
+        d[@"actions"] = @([sc actionsForTarget:nil forControlEvent:UIControlEventValueChanged].count);
+    }
+    if ([v isKindOfClass:[UISwitch class]]) d[@"on"] = @(((UISwitch *)v).isOn);
+    if (v.hidden) d[@"hidden"] = @YES;
+    if (v.alpha < 0.99) d[@"alpha"] = @(v.alpha);
+    if (v.subviews.count) {
+        NSMutableArray *kids = [NSMutableArray array];
+        for (UIView *c in v.subviews) {
+            NSDictionary *cd = YkDumpView(c, depth + 1);
+            if (cd) [kids addObject:cd];
+        }
+        d[@"sub"] = kids;
+    }
+    return d;
+}
+
+static NSDictionary *YkDumpWindow(void) {
+    __block NSDictionary *out = nil;
+    void (^blk)(void) = ^{
+        UIWindow *w = nil;
+        for (UIWindow *win in UIApplication.sharedApplication.windows) {
+            if (win.isKeyWindow) { w = win; break; }
+        }
+        if (!w) w = UIApplication.sharedApplication.windows.firstObject;
+        if (w) out = YkDumpView(w, 0);
+    };
+    if ([NSThread isMainThread]) blk();
+    else dispatch_sync(dispatch_get_main_queue(), blk);
+    return out ?: @{ @"error": @"无窗口" };
+}
+
 static NSDictionary *YKErr(NSString *code, NSString *msg) {
     return @{ @"value": @{ @"error": code, @"message": msg ?: @"" } };
 }
@@ -167,6 +218,14 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
     NSString *head = seg.count ? seg[0] : @"";
 
     NSString *p = body[@"path"] ?: query[@"path"];
+
+
+    // ---- debug（视图树自检）----
+    if ([head isEqualToString:@"debug"]) {
+        NSString *verb = seg.count > 1 ? seg[1] : @"ui";
+        if ([verb isEqualToString:@"ui"]) return @{ @"value": YkDumpWindow() };
+        return YKErr(@"not_found", verb);
+    }
 
     // ---- touch（IOHID 注入）----
     if ([head isEqualToString:@"touch"]) {
