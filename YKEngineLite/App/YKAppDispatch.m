@@ -492,7 +492,8 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             // 单点比对
             if ([verb hasPrefix:@"cmpColor"]) {
                 NSInteger px = [body[@"x"] integerValue], py = [body[@"y"] integerValue];
-                int hex = YkHexColor((body[@"colors"] ?: @[]).count ? body[@"colors"][0] : body[@"color"]);
+                NSArray *cArr = [body[@"colors"] isKindOfClass:[NSArray class]] ? body[@"colors"] : nil;
+                int hex = YkHexColor(cArr.count ? cArr[0] : body[@"color"]);
                 if (hex < 0) return YKErr(@"invalid argument", @"缺少 color");
                 int p4[4] = {0};
                 if (!YkPixelAt(src, px, py, p4)) return YKErr(@"invalid argument", @"坐标越界");
