@@ -97,6 +97,17 @@ static NSString *YkUUID40(void) {
 
 // ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
 static NSMutableDictionary *gImages = nil;
+extern NSDictionary *YkOpenCVFindImage(NSString *srcPath, NSString *tplPath, double threshold, NSInteger maxResults, BOOL all);
+
+static NSString *YkPathForImage(NSString *iid) {
+    UIImage *img = iid ? gImages[iid] : nil;
+    if (!img) return nil;
+    NSString *p = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                   [NSString stringWithFormat:@"ykimg_%@.png", iid]];
+    NSData *d = UIImagePNGRepresentation(img);
+    if (![d writeToFile:p atomically:YES]) return nil;
+    return p;
+}
 
 static NSString *YkNewImageId(UIImage *img) {
     if (!gImages) gImages = [NSMutableDictionary dictionary];
@@ -444,6 +455,24 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             if ([verb isEqualToString:@"findColor"])
                 return @{ @"value": hits.count ? hits.firstObject : [NSNull null] };
             return @{ @"value": @{ @"count": @(hits.count), @"points": hits } };
+        }
+
+        // ---- findImage（OpenCV 模板匹配）----
+        if ([verb hasPrefix:@"findImage"] || [verb hasPrefix:@"opencvFindImage"]) {
+            if (!src) return YKErr(@"not_found", @"imageId");
+            NSString *srcPath = YkPathForImage(iid);
+            id tplObj = body[@"template"] ?: body[@"templatePath"] ?: body[@"imageId2"];
+            NSString *tplPath = nil;
+            if ([tplObj isKindOfClass:[NSString class]] && [(NSString *)tplObj hasPrefix:@"/"]) {
+                tplPath = tplObj;
+            } else {
+                tplPath = YkPathForImage((NSString *)tplObj);
+            }
+            if (!srcPath || !tplPath) return YKErr(@"invalid argument", @"模板需为本地路径或已加载的 imageId");
+            double th = [body[@"threshold"] doubleValue] ?: 0.8;
+            NSInteger maxN = [body[@"maxResults"] integerValue] ?: 100;
+            BOOL all = [verb hasSuffix:@"All"];
+            return YkOpenCVFindImage(srcPath, tplPath, th, maxN, all);
         }
         if ([verb isEqualToString:@"releaseAll"]) { [gImages removeAllObjects]; return @{ @"value": @YES }; }
         if ([verb isEqualToString:@"activeCount"]) return @{ @"value": @(gImages.count) };
