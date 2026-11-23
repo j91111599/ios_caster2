@@ -347,10 +347,10 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
     return box;
 }
 
-@end
-
 - (void)ykSegChanged:(UISegmentedControl *)sc {
     NSArray *names = @[@"设备页 · 本机引擎 65324", @"脚本页 · /executor/scripts", @"录制页 · /record/tasks"];
     NSInteger i = sc.selectedSegmentIndex;
     if (i >= 0 && i < (NSInteger)names.count) _pageLabel.text = names[i];
 }
+
+@end
