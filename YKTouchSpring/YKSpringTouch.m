@@ -7,6 +7,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <sys/socket.h>
+#import <sys/stat.h>
+#import <string.h>
 #import <sys/un.h>
 #import <unistd.h>
 #import <dlfcn.h>
