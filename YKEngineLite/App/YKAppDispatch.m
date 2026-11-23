@@ -5,6 +5,8 @@
 //        YKPlistModule / YKScreenModule / YKCryptoModule / YKNetworkModule / YKUIDispatcher）
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <sys/utsname.h>
+#import <CommonCrypto/CommonDigest.h>
 
 @class RouteRequest, RouteResponse;
 
@@ -57,6 +59,40 @@
 @end
 
 #pragma mark - 分派
+
+
+static NSString *YkMachine(void) {
+    struct utsname u; uname(&u);
+    NSString *m = @(u.machine);
+    NSDictionary *map = @{ @"iPhone9,1": @"iPhone 7", @"iPhone9,3": @"iPhone 7",
+                           @"iPhone10,1": @"iPhone 8", @"iPhone10,4": @"iPhone 8",
+                           @"iPhone10,2": @"iPhone 8 Plus", @"iPhone10,5": @"iPhone 8 Plus",
+                           @"iPhone10,3": @"iPhone X", @"iPhone10,6": @"iPhone X",
+                           @"iPhone11,2": @"iPhone XS", @"iPhone12,1": @"iPhone 11",
+                           @"iPhone12,3": @"iPhone 11 Pro", @"iPhone13,2": @"iPhone 12",
+                           @"iPhone14,5": @"iPhone 13" };
+    return map[m] ?: m;
+}
+
+static NSString *YkLocaleJSON(void) {
+    NSLocale *l = [NSLocale currentLocale];
+    NSDictionary *d = @{ @"region": [l objectForKey:NSLocaleCountryCode] ?: @"",
+                         @"localeIdentifier": l.localeIdentifier ?: @"",
+                         @"language": [l objectForKey:NSLocaleLanguageCode] ?: @"" };
+    NSData *j = [NSJSONSerialization dataWithJSONObject:d options:0 error:NULL];
+    return [[NSString alloc] initWithData:j encoding:NSUTF8StringEncoding] ?: @"{}";
+}
+
+// 40 位十六进制（SHA1），与原版格式一致
+static NSString *YkUUID40(void) {
+    NSString *seed = [UIDevice currentDevice].identifierForVendor.UUIDString ?: @"yk";
+    NSData *in = [seed dataUsingEncoding:NSUTF8StringEncoding];
+    unsigned char d[CC_SHA1_DIGEST_LENGTH] = {0};
+    CC_SHA1(in.bytes, (CC_LONG)in.length, d);
+    NSMutableString *o = [NSMutableString string];
+    for (int i = 0; i < CC_SHA1_DIGEST_LENGTH; i++) [o appendFormat:@"%02x", d[i]];
+    return o;
+}
 
 static NSDictionary *YKErr(NSString *code, NSString *msg) {
     return @{ @"value": @{ @"error": code, @"message": msg ?: @"" } };
@@ -165,15 +201,15 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             return @{ @"value": @(NO) };
         if ([verb isEqualToString:@"info"]) {
             CGRect b = [UIScreen mainScreen].bounds;
-            return @{ @"value": @{ @"model": d.model ?: @"iPhone",
+            return @{ @"value": @{ @"model": YkMachine(),
                                    @"name": d.name ?: @"",
                                    @"systemName": d.systemName ?: @"iOS",
                                    @"systemVersion": d.systemVersion ?: @"",
-                                   @"identifier": d.identifierForVendor.UUIDString ?: @"",
+                                   @"identifier": YkUUID40(),
                                    @"screenWidth": @(b.size.width),
                                    @"screenHeight": @(b.size.height),
                                    @"scale": @([UIScreen mainScreen].scale),
-                                   @"locale": [NSLocale currentLocale].localeIdentifier ?: @"" } };
+                                   @"locale": YkLocaleJSON() } };
         }
         return YKErr(@"not_found", verb);
     }
