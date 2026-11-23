@@ -190,13 +190,12 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
     if ([head isEqualToString:@"device"]) {
         UIDevice *d = [UIDevice currentDevice];
         NSString *verb = seg.count > 1 ? seg[1] : @"info";
-        if ([verb isEqualToString:@"model"])   return @{ @"value": d.model ?: @"iPhone" };
+        if ([verb isEqualToString:@"model"]) return @{ @"value": YkMachine() };
         if ([verb isEqualToString:@"name"])    return @{ @"value": d.name ?: @"" };
         if ([verb isEqualToString:@"systemVersion"] || [verb isEqualToString:@"version"])
             return @{ @"value": d.systemVersion ?: @"" };
-        if ([verb isEqualToString:@"uuid"])    return @{ @"value": d.identifierForVendor.UUIDString ?: @"" };
-        if ([verb isEqualToString:@"locale"])
-            return @{ @"value": [NSLocale currentLocale].localeIdentifier ?: @"" };
+        if ([verb isEqualToString:@"uuid"]) return @{ @"value": YkUUID40() };
+        if ([verb isEqualToString:@"locale"]) return @{ @"value": YkLocaleJSON() };
         if ([verb isEqualToString:@"isScreenLocked"])
             return @{ @"value": @(NO) };
         if ([verb isEqualToString:@"info"]) {
