@@ -51,6 +51,17 @@ jobs:
           echo "$THEOS/bin" >> "$GITHUB_PATH"
           ls "$THEOS/sdks" | head -3
 
+      - name: Fetch OpenCV framework
+        run: |
+          set -e
+          mkdir -p Frameworks
+          if [ ! -d Frameworks/opencv2.framework ]; then
+            curl -fsSL -o /tmp/ocv.zip https://github.com/opencv/opencv/releases/download/4.10.0/opencv-4.10.0-ios-framework.zip
+            unzip -q /tmp/ocv.zip -d /tmp/ocv
+            cp -R /tmp/ocv/opencv2.framework Frameworks/ || true
+          fi
+          ls Frameworks
+
       - name: Build (rootless)
         run: |
           set -euo pipefail
