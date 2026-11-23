@@ -37,19 +37,6 @@ static void YkSendEvent(IOHIDEventRef ev) {
 
 // 单指事件：phase 1=down 2=up 3=move，其余手指抬起
 static void YkFingerEvent(int phase, double x, double y, double pressure, uint64_t ts) {
-    typedef IOHIDEventRef (*DigitizerFn)(CFAllocatorRef, IOHIDEventRef, IOHIDEventRef,
-                                         uint32_t, uint32_t, uint32_t, uint32_t,
-                                         IOHIDEventRef, double, double, double, double,
-                                         double, double, double, double, double, double,
-                                         uint32_t, uint32_t, uint32_t, uint32_t,
-                                         uint32_t, uint32_t, uint32_t);
-    typedef IOHIDEventRef (*FingerFn)(CFAllocatorRef, IOHIDEventRef, IOHIDEventRef,
-                                      uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                                      double, double, double, double, double, double,
-                                      double, double, double, double, double, double,
-                                      double, double, double, double, uint32_t);
-    (void)DigitizerFn; (void)FingerFn;
-
     typedef IOHIDEventRef (*SimpleDigitizerFn)(CFAllocatorRef, IOHIDEventRef, double, double,
                                                uint32_t, uint32_t, uint32_t, uint32_t,
                                                uint32_t, double, double, double, double,

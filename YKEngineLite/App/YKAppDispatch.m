@@ -168,6 +168,31 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
 
     NSString *p = body[@"path"] ?: query[@"path"];
 
+    // ---- touch（IOHID 注入）----
+    if ([head isEqualToString:@"touch"]) {
+        NSString *verb = seg.count > 1 ? seg[1] : @"";
+        double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        if ([verb isEqualToString:@"tap"] || [verb isEqualToString:@"tapAt"])
+            return YkTouchTap(x, y);
+        if ([verb isEqualToString:@"down"]) {
+            return YkTouchLongPress(x, y, 0.05);
+        }
+        if ([verb isEqualToString:@"longPress"] || [verb isEqualToString:@"longTap"])
+            return YkTouchLongPress(x, y, [body[@"duration"] doubleValue] ?: 1.0);
+        if ([verb isEqualToString:@"swipe"] || [verb isEqualToString:@"drag"]) {
+            double x2 = [body[@"toX"] doubleValue] ?: [body[@"x2"] doubleValue];
+            double y2 = [body[@"toY"] doubleValue] ?: [body[@"y2"] doubleValue];
+            return YkTouchSwipe(x, y, x2, y2, [body[@"duration"] doubleValue] ?: 0.3,
+                                [body[@"steps"] integerValue] ?: 12);
+        }
+        if ([verb isEqualToString:@"multi"] || [verb isEqualToString:@"pinch"])
+            return YkTouchMulti((int)([body[@"fingers"] integerValue] ?: 2),
+                                x, y,
+                                [body[@"x2"] doubleValue], [body[@"y2"] doubleValue],
+                                [body[@"duration"] doubleValue] ?: 0.3);
+        return YKErr(@"not_found", verb);
+    }
+
     // ---- file ----
     if ([head isEqualToString:@"file"]) {
         NSString *verb = seg.count > 1 ? seg[1] : @"";
@@ -589,29 +614,4 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
 
     return YKErr(@"not_found", path);
 }
-    // ---- touch（IOHID 注入）----
-    if ([head isEqualToString:@"touch"]) {
-        NSString *verb = seg.count > 1 ? seg[1] : @"";
-        double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
-        if ([verb isEqualToString:@"tap"] || [verb isEqualToString:@"tapAt"])
-            return YkTouchTap(x, y);
-        if ([verb isEqualToString:@"down"]) {
-            return YkTouchLongPress(x, y, 0.05);
-        }
-        if ([verb isEqualToString:@"longPress"] || [verb isEqualToString:@"longTap"])
-            return YkTouchLongPress(x, y, [body[@"duration"] doubleValue] ?: 1.0);
-        if ([verb isEqualToString:@"swipe"] || [verb isEqualToString:@"drag"]) {
-            double x2 = [body[@"toX"] doubleValue] ?: [body[@"x2"] doubleValue];
-            double y2 = [body[@"toY"] doubleValue] ?: [body[@"y2"] doubleValue];
-            return YkTouchSwipe(x, y, x2, y2, [body[@"duration"] doubleValue] ?: 0.3,
-                                [body[@"steps"] integerValue] ?: 12);
-        }
-        if ([verb isEqualToString:@"multi"] || [verb isEqualToString:@"pinch"])
-            return YkTouchMulti((int)([body[@"fingers"] integerValue] ?: 2),
-                                x, y,
-                                [body[@"x2"] doubleValue], [body[@"y2"] doubleValue],
-                                [body[@"duration"] doubleValue] ?: 0.3);
-        return YKErr(@"not_found", verb);
-    }
-
 
