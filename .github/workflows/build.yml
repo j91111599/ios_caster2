@@ -51,36 +51,6 @@ jobs:
           echo "$THEOS/bin" >> "$GITHUB_PATH"
           ls "$THEOS/sdks" | head -3
 
-      - name: Fetch OpenCV framework
-        run: |
-          set -e
-          mkdir -p Frameworks
-          if [ ! -d Frameworks/opencv2.framework ]; then
-            curl -fsSL -o /tmp/ocv.zip https://github.com/opencv/opencv/releases/download/4.10.0/opencv-4.10.0-ios-framework.zip
-            unzip -q /tmp/ocv.zip -d /tmp/ocv
-            cp -R /tmp/ocv/opencv2.framework Frameworks/ || true
-          fi
-          ls Frameworks
-          # 把 framework 放进 app bundle，否则 dyld 找不到
-          APP=layout/var/jb/Applications/YKEngineApp.app/Frameworks
-          mkdir -p "$APP"
-          cp -R Frameworks/opencv2.framework "$APP"/
-          ls -d "$APP"
-          # 瘦身：只留 arm64 切片，去掉模拟器/多余架构与头文件
-          FW="$APP/opencv2.framework"
-          LIPO=$(ls /usr/lib/llvm-*/bin/llvm-lipo 2>/dev/null | head -1)
-          if [ -n "$LIPO" ]; then
-            BIN=$(find "$FW" -type f -name "opencv2" | head -1); [ -z "$BIN" ] && BIN=$(find "$FW" -type f -perm -u+x ! -name "*.h*" | head -1)
-            echo "binary: $BIN"
-            "$LIPO" -info "$BIN" || true
-            "$LIPO" -thin arm64 "$BIN" -output /tmp/ocv_arm64 && mv /tmp/ocv_arm64 "$BIN"
-            "$LIPO" -info "$BIN" || true
-          else
-            echo "no llvm-lipo found"
-          fi
-          rm -rf "$FW/Headers" "$FW/Modules" 2>/dev/null || true
-          du -sh "$FW" || true
-
       - name: Build (rootless)
         run: |
           set -euo pipefail

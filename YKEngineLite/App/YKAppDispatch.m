@@ -97,7 +97,7 @@ static NSString *YkUUID40(void) {
 
 // ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
 static NSMutableDictionary *gImages = nil;
-extern NSDictionary *YkOpenCVFindImage(NSString *srcPath, NSString *tplPath, double threshold, NSInteger maxResults, BOOL all);
+extern NSDictionary *YkMatchTemplate(UIImage *scene, UIImage *tpl, double threshold);
 
 static NSString *YkPathForImage(NSString *iid) {
     UIImage *img = iid ? gImages[iid] : nil;
@@ -472,7 +472,10 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             double th = [body[@"threshold"] doubleValue] ?: 0.8;
             NSInteger maxN = [body[@"maxResults"] integerValue] ?: 100;
             BOOL all = [verb hasSuffix:@"All"];
-            return YkOpenCVFindImage(srcPath, tplPath, th, maxN, all);
+            UIImage *tplImg = [UIImage imageWithContentsOfFile:tplPath];
+            NSDictionary *hit = YkMatchTemplate(src, tplImg, th);
+            if (all) return @{ @"value": @{ @"count": hit ? @1 : @0, @"matches": hit ? @[hit] : @[] } };
+            return @{ @"value": hit ?: [NSNull null] };
         }
         if ([verb isEqualToString:@"releaseAll"]) { [gImages removeAllObjects]; return @{ @"value": @YES }; }
         if ([verb isEqualToString:@"activeCount"]) return @{ @"value": @(gImages.count) };
