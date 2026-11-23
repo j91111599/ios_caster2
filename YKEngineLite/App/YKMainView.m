@@ -44,8 +44,17 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 @property (nonatomic, strong) UIView *bottomBar;
 @property (nonatomic, strong) UIView *pageHost;
 @property (nonatomic, strong) NSMutableArray<UIView *> *pages;
-@property (nonatomic, strong) UIView *pageHost;
-@property (nonatomic, strong) NSMutableArray<UIView *> *pages;
+@end
+
+@interface YKMainView ()
+- (void)ykBuildPages;
+- (void)ykSegmentChanged:(UISegmentedControl *)sc;
+- (void)ykLoadScripts;
+- (void)ykLoadRecords;
+- (void)ykSetBody:(NSInteger)idx text:(NSString *)txt;
+- (void)ykFetch:(NSString *)path done:(void (^)(NSDictionary *))done;
+- (UILabel *)ykLine:(NSString *)text size:(CGFloat)sz bold:(BOOL)b color:(UIColor *)c;
+- (UIView *)ykPageWithTitle:(NSString *)title body:(NSString *)body;
 @end
 
 @implementation YKMainView
