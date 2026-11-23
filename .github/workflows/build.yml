@@ -68,7 +68,16 @@ jobs:
           ls -d "$APP"
           # 瘦身：只留 arm64 切片，去掉模拟器/多余架构与头文件
           FW="$APP/opencv2.framework"
-          lipo -thin arm64 "$FW/opencv2" -o /tmp/ocv_arm64 && mv /tmp/ocv_arm64 "$FW/opencv2"
+          LIPO=$(ls /usr/lib/llvm-*/bin/llvm-lipo 2>/dev/null | head -1)
+          if [ -n "$LIPO" ]; then
+            BIN=$(find "$FW" -maxdepth 2 -type f -name "opencv2" | head -1)
+            echo "binary: $BIN"
+            "$LIPO" -info "$BIN" || true
+            "$LIPO" -thin arm64 "$BIN" -output /tmp/ocv_arm64 && mv /tmp/ocv_arm64 "$BIN"
+            "$LIPO" -info "$BIN" || true
+          else
+            echo "no llvm-lipo found"
+          fi
           rm -rf "$FW/Headers" "$FW/Modules" 2>/dev/null || true
           du -sh "$FW" || true
 
