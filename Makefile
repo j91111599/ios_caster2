@@ -22,7 +22,7 @@ include $(THEOS_MAKE_PATH)/tool.mk
 
 # ---------- App（SpringBoard 图标 + 界面 + 进程内引擎）----------
 APPLICATION_NAME = YKEngineApp
-YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngineLite/App/YKScriptScreens.m YKEngineLite/App/YKAppDispatch.m YKEngineLite/App/YKMatch.m YKEngineLite/Compat/YKHTTPServerCompat.m YKEngineLite/Compat/SSZipArchiveCompat.m YKEngineLite/Recovered/YKUtilityModules.m YKEngineLite/Recovered/YKCryptoNetworkModules.m YKEngineLite/Recovered/YKUIModule.m
+YKEngineApp_FILES = YKEngineLite/App/main.m YKEngineLite/App/YKMainView.m YKEngineLite/App/YKScriptScreens.m YKEngineLite/App/YKAppDispatch.m YKEngineLite/App/YKMatch.m YKEngineLite/App/YKTouch.m YKEngineLite/Compat/YKHTTPServerCompat.m YKEngineLite/Compat/SSZipArchiveCompat.m YKEngineLite/Recovered/YKUtilityModules.m YKEngineLite/Recovered/YKCryptoNetworkModules.m YKEngineLite/Recovered/YKUIModule.m
 YKEngineApp_FRAMEWORKS = UIKit Foundation Network
 YKEngineApp_CFLAGS = -fobjc-arc -Wno-nullability-completeness -F$(THEOS_PROJECT_DIR)/Frameworks -I$(THEOS_PROJECT_DIR)/Frameworks/opencv2.framework/Headers -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness -IYKEngineLite/Compat -IYKEngineLite/Recovered -Wno-unused-const-variable -Wno-unused-function
 YKEngineApp_LDFLAGS = -fuse-ld=lld
@@ -30,6 +30,8 @@ YKEngineApp_CODESIGN_FLAGS = -SYKEngineLite/App/entitlements.plist
 YKEngineApp_INSTALL_PATH = /Applications
 YKEngineApp_INFO_PLIST = YKEngineLite/App/Info.plist
 YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources/AppIcon60x60@2x.png YKEngineLite/App/Info.plist
+# ---------- SpringBoard 触控注入 ----------
+
 include $(THEOS_MAKE_PATH)/application.mk
 
 after-install::
