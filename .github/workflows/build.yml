@@ -70,7 +70,7 @@ jobs:
           FW="$APP/opencv2.framework"
           LIPO=$(ls /usr/lib/llvm-*/bin/llvm-lipo 2>/dev/null | head -1)
           if [ -n "$LIPO" ]; then
-            BIN=$(find "$FW" -maxdepth 2 -type f -name "opencv2" | head -1)
+            BIN=$(find "$FW" -type f -name "opencv2" | head -1); [ -z "$BIN" ] && BIN=$(find "$FW" -type f -perm -u+x ! -name "*.h*" | head -1)
             echo "binary: $BIN"
             "$LIPO" -info "$BIN" || true
             "$LIPO" -thin arm64 "$BIN" -output /tmp/ocv_arm64 && mv /tmp/ocv_arm64 "$BIN"
