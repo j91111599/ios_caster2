@@ -26,17 +26,39 @@ static YkGray YkGrayFromImage(UIImage *img) {
     YkGray r = {0, 0, NULL};
     CGImageRef cg = img.CGImage;
     if (!cg) return r;
+
     size_t w = CGImageGetWidth(cg), h = CGImageGetHeight(cg);
-    unsigned char *buf = malloc(w * h * 4);
-    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-    CGContextRef ctx = CGBitmapContextCreate(buf, w, h, 8, w * 4, cs, kCGImageAlphaPremultipliedLast);
-    CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), cg);
-    CGContextRelease(ctx); CGColorSpaceRelease(cs);
+    size_t bpr = CGImageGetBytesPerRow(cg);
+    size_t bpp = CGImageGetBitsPerPixel(cg) / 8;
+    if (w == 0 || h == 0 || bpp < 3) return r;
+
+    CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(cg));
+    if (!data) return r;
+    const uint8_t *p = CFDataGetBytePtr(data);
+    size_t len = CFDataGetLength(data);
+    if (!p || len < bpr * h) { CFRelease(data); return r; }
+
+    // 判断通道顺序（BGRA 最常见）
+    CGBitmapInfo info = CGImageGetBitmapInfo(cg);
+    BOOL bgra = ((info & kCGBitmapByteOrder32Little) == kCGBitmapByteOrder32Little);
+
     unsigned char *g = malloc(w * h);
-    for (size_t i = 0; i < w * h; i++) {
-        g[i] = (unsigned char)((buf[i*4] * 77 + buf[i*4+1] * 150 + buf[i*4+2] * 29) >> 8);
+    size_t nonzero = 0;
+    for (size_t y = 0; y < h; y++) {
+        const uint8_t *row = p + y * bpr;
+        for (size_t x = 0; x < w; x++) {
+            const uint8_t *px = row + x * bpp;
+            int R, G, B;
+            if (bgra) { B = px[0]; G = px[1]; R = px[2]; }
+            else      { R = px[0]; G = px[1]; B = px[2]; }
+            unsigned char v = (unsigned char)((R * 77 + G * 150 + B * 29) >> 8);
+            g[y * w + x] = v;
+            if (v) nonzero++;
+        }
     }
-    free(buf);
+    CFRelease(data);
+
+    YkLog(@"gray %zux%zu bpr=%zu bpp=%zu bgra=%d nonzero=%zu", w, h, bpr, bpp, bgra, nonzero);
     r.w = (int)w; r.h = (int)h; r.g = g;
     return r;
 }
