@@ -514,7 +514,17 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(onBecomeActive)
+                                                 name:UIApplicationDidBecomeActiveNotification
+                                               object:nil];
     [self startEngineIfNeeded];
+}
+
+- (void)onBecomeActive { [self startEngineIfNeeded]; }
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)startEngineIfNeeded {
