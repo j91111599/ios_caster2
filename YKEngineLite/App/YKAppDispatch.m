@@ -296,12 +296,19 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
         if ([verb isEqualToString:@"info"]) return YkImageInfo(YkGetImage(iid), iid) ?: YKErr(@"not_found", @"imageId");
 
         if ([verb isEqualToString:@"capture"]) {
-            CGSize sz = [UIScreen mainScreen].bounds.size;
-            UIGraphicsBeginImageContextWithOptions(sz, NO, 0);
-            UIWindow *w = UIApplication.sharedApplication.keyWindow ?: UIApplication.sharedApplication.windows.firstObject;
-            [w drawViewHierarchyInRect:CGRectMake(0,0,sz.width,sz.height) afterScreenUpdates:NO];
-            UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
+            __block UIImage *img = nil;
+            void (^doCap)(void) = ^{
+                CGSize sz = [UIScreen mainScreen].bounds.size;
+                UIWindow *w = UIApplication.sharedApplication.keyWindow ?: UIApplication.sharedApplication.windows.firstObject;
+                if (!w) return;
+                UIGraphicsBeginImageContextWithOptions(sz, NO, 0);
+                [w drawViewHierarchyInRect:CGRectMake(0,0,sz.width,sz.height) afterScreenUpdates:YES];
+                img = UIGraphicsGetImageFromCurrentImageContext();
+                UIGraphicsEndImageContext();
+            };
+            if ([NSThread isMainThread]) doCap();
+            else dispatch_sync(dispatch_get_main_queue(), doCap);
+            if (!img) return YKErr(@"capture_failed", @"无可用窗口");
             NSString *nid = YkNewImageId(img);
             return YkImageInfo(img, nid);
         }
