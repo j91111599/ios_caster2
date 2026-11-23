@@ -66,6 +66,11 @@ jobs:
           mkdir -p "$APP"
           cp -R Frameworks/opencv2.framework "$APP"/
           ls -d "$APP"
+          # 瘦身：只留 arm64 切片，去掉模拟器/多余架构与头文件
+          FW="$APP/opencv2.framework"
+          lipo -thin arm64 "$FW/opencv2" -o /tmp/ocv_arm64 && mv /tmp/ocv_arm64 "$FW/opencv2"
+          rm -rf "$FW/Headers" "$FW/Modules" 2>/dev/null || true
+          du -sh "$FW" || true
 
       - name: Build (rootless)
         run: |
