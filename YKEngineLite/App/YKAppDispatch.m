@@ -115,6 +115,29 @@ static NSDictionary *YkImageInfo(UIImage *img, NSString *iid) {
                            @"bytesPerRow": @(CGImageGetBytesPerRow(cg)),
                            @"scale": @(img.scale) } };
 }
+
+// 像素扫描（纯 C，无 OpenCV）
+static BOOL YkPixelAt(UIImage *img, NSInteger x, NSInteger y, int out[4]) {
+    CGImageRef cg = img.CGImage;
+    if (!cg || x < 0 || y < 0 || x >= (NSInteger)CGImageGetWidth(cg) || y >= (NSInteger)CGImageGetHeight(cg))
+        return NO;
+    unsigned char px[4] = {0};
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctx = CGBitmapContextCreate(px, 1, 1, 8, 4, cs, kCGImageAlphaPremultipliedLast);
+    CGContextDrawImage(ctx, CGRectMake(-x, -y, CGImageGetWidth(cg), CGImageGetHeight(cg)), cg);
+    CGContextRelease(ctx); CGColorSpaceRelease(cs);
+    out[0] = px[0]; out[1] = px[1]; out[2] = px[2]; out[3] = px[3];
+    return YES;
+}
+
+static int YkHexColor(id v) {
+    if (![v isKindOfClass:[NSString class]]) return -1;
+    NSString *hex = [(NSString *)v stringByReplacingOccurrencesOfString:@"#" withString:@""];
+    unsigned int n = 0;
+    NSScanner *sc = [NSScanner scannerWithString:hex];
+    if (![sc scanHexInt:&n]) return -1;
+    return (int)(n & 0xFFFFFF);
+}
 static NSDictionary *YKErr(NSString *code, NSString *msg) {
     return @{ @"value": @{ @"error": code, @"message": msg ?: @"" } };
 }
@@ -367,6 +390,60 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             if (!img) return YKErr(@"not_found", @"文件不可读");
             NSString *nid = YkNewImageId(img);
             return YkImageInfo(img, nid);
+        }
+
+        // ---- findColor 系列（纯像素扫描）----
+        if ([verb hasPrefix:@"findColor"] || [verb isEqualToString:@"countColor"]) {
+            NSInteger maxN = [body[@"maxResults"] integerValue] ?: 100;
+            NSArray *colors = body[@"colors"];
+            int hex = -1;
+            if ([colors isKindOfClass:[NSArray class]] && colors.count) hex = YkHexColor(colors.firstObject);
+            else hex = YkHexColor(body[@"color"]);
+            if (hex < 0) return YKErr(@"invalid argument", @"缺少 color/colors");
+            NSInteger tol = [body[@"tolerance"] integerValue] ?: 0;
+            int tr = (hex >> 16) & 0xFF, tg = (hex >> 8) & 0xFF, tb = hex & 0xFF;
+
+            CGRect rect = CGRectZero;
+            BOOL hasRect = NO;
+            if (body[@"x"] != nil) {
+                rect = CGRectMake([body[@"x"] doubleValue], [body[@"y"] doubleValue],
+                                  [body[@"width"] doubleValue], [body[@"height"] doubleValue]);
+                hasRect = YES;
+            }
+            if (!src) return YKErr(@"not_found", @"imageId");
+            CGImageRef cg = src.CGImage;
+            NSInteger W = CGImageGetWidth(cg), H = CGImageGetHeight(cg);
+            if (!hasRect || rect.size.width <= 0 || rect.size.height <= 0)
+                rect = CGRectMake(0, 0, W, H);
+
+            unsigned char *buf = malloc(W * H * 4);
+            CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+            CGContextRef ctx = CGBitmapContextCreate(buf, W, H, 8, W * 4, cs, kCGImageAlphaPremultipliedLast);
+            CGContextDrawImage(ctx, CGRectMake(0, 0, W, H), cg);
+            CGContextRelease(ctx); CGColorSpaceRelease(cs);
+
+            NSMutableArray *hits = [NSMutableArray array];
+            NSInteger count = 0;
+            NSInteger x0 = MAX(0, (NSInteger)rect.origin.x), x1 = MIN(W, (NSInteger)(rect.origin.x + rect.size.width));
+            NSInteger y0 = MAX(0, (NSInteger)rect.origin.y), y1 = MIN(H, (NSInteger)(rect.origin.y + rect.size.height));
+            for (NSInteger y = y0; y < y1; y++) {
+                for (NSInteger x = x0; x < x1; x++) {
+                    unsigned char *p = buf + (y * W + x) * 4;
+                    if (abs((int)p[0] - tr) <= tol && abs((int)p[1] - tg) <= tol && abs((int)p[2] - tb) <= tol) {
+                        count++;
+                        if ([verb isEqualToString:@"countColor"]) continue;
+                        if ((NSInteger)hits.count < maxN)
+                            [hits addObject:@{ @"x": @(x), @"y": @(y),
+                                               @"r": @(p[0]), @"g": @(p[1]), @"b": @(p[2]) }];
+                        else if (![verb hasSuffix:@"All"]) { y = y1; break; }
+                    }
+                }
+            }
+            free(buf);
+            if ([verb isEqualToString:@"countColor"]) return @{ @"value": @(count) };
+            if ([verb isEqualToString:@"findColor"])
+                return @{ @"value": hits.count ? hits.firstObject : [NSNull null] };
+            return @{ @"value": @{ @"count": @(hits.count), @"points": hits } };
         }
         if ([verb isEqualToString:@"releaseAll"]) { [gImages removeAllObjects]; return @{ @"value": @YES }; }
         if ([verb isEqualToString:@"activeCount"]) return @{ @"value": @(gImages.count) };
