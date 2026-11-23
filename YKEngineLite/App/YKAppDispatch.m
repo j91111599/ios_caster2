@@ -172,6 +172,10 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
     if ([head isEqualToString:@"touch"]) {
         NSString *verb = seg.count > 1 ? seg[1] : @"";
         double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        if ([verb isEqualToString:@"ping"]) {
+            extern NSDictionary *YkTouchPing(void);
+            return YkTouchPing();
+        }
         if ([verb isEqualToString:@"tap"] || [verb isEqualToString:@"tapAt"])
             return YkTouchTap(x, y);
         if ([verb isEqualToString:@"down"]) {
