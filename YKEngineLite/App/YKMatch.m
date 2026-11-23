@@ -170,3 +170,85 @@ NSDictionary *YkMatchTemplate(UIImage *sceneImg, UIImage *tplImg, double thresho
               @"centerX": @(fx + tplImg.size.width * tplImg.scale / 2),
               @"centerY": @(fy + tplImg.size.height * tplImg.scale / 2) };
 }
+
+// 多目标匹配：粗搜取所有超过阈值的点 → 距离 NMS → 逐个精修
+NSArray *YkMatchTemplateAll(UIImage *sceneImg, UIImage *tplImg, double threshold, NSInteger maxResults)
+{
+    if (!sceneImg || !tplImg) return @[];
+    YkGray scene = YkGrayFromImage(sceneImg);
+    YkGray tpl = YkGrayFromImage(tplImg);
+    if (!scene.g || !tpl.g) { YkGrayFree(&scene); YkGrayFree(&tpl); return @[]; }
+    if (tpl.w > scene.w || tpl.h > scene.h) { YkGrayFree(&scene); YkGrayFree(&tpl); return @[]; }
+
+    int f = 1;
+    int mn = MIN(tpl.w, tpl.h);
+    while (mn / (f * 2) >= 8 && f < 4) f *= 2;
+
+    YkGray sS = YkDownsample(scene, f);
+    YkGray tS = YkDownsample(tpl, f);
+    NSMutableArray *out = [NSMutableArray array];
+    if (tS.w >= 2 && tS.h >= 2) {
+        NSInteger limit = maxResults > 0 ? maxResults : 20;
+        int minDist = MAX(tS.w, tS.h);
+        for (int y = 0; y <= sS.h - tS.h && (NSInteger)out.count < limit; y++) {
+            for (int x = 0; x <= sS.w - tS.w; x++) {
+                double v = YkZNCC(sS, tS, x, y);
+                if (v < threshold) continue;
+                BOOL dup = NO;
+                for (NSDictionary *h in out) {
+                    int hx = [h[@"x"] intValue] / f, hy = [h[@"y"] intValue] / f;
+                    if (abs(hx - x) < minDist && abs(hy - y) < minDist) { dup = YES; break; }
+                }
+                if (dup) continue;
+                int cx = x * f, cy = y * f;
+                double bestV = v; int bx = cx, by = cy;
+                for (int dy = -f; dy <= f; dy++) {
+                    for (int dx = -f; dx <= f; dx++) {
+                        int nx = cx + dx, ny = cy + dy;
+                        if (nx < 0 || ny < 0 || nx + tpl.w > scene.w || ny + tpl.h > scene.h) continue;
+                        double vv = YkZNCC(scene, tpl, nx, ny);
+                        if (vv > bestV) { bestV = vv; bx = nx; by = ny; }
+                    }
+                }
+                if (bestV >= threshold) {
+                    [out addObject:@{ @"x": @(bx), @"y": @(by),
+                                      @"width": @(tpl.w), @"height": @(tpl.h),
+                                      @"score": @(bestV),
+                                      @"centerX": @(bx + tpl.w / 2),
+                                      @"centerY": @(by + tpl.h / 2) }];
+                }
+                if ((NSInteger)out.count >= limit) break;
+            }
+        }
+    }
+    YkGrayFree(&sS); YkGrayFree(&tS); YkGrayFree(&scene); YkGrayFree(&tpl);
+    YkLog(@"multi-match count=%lu", (unsigned long)out.count);
+    return out;
+}
+
+// 多尺度匹配：按 scales 依次尝试，取最高分
+NSDictionary *YkMatchTemplateScale(UIImage *sceneImg, UIImage *tplImg, double threshold,
+                                   NSArray *scales, double *usedScale)
+{
+    NSDictionary *best = nil; double bestScore = -2; double bestScale = 1.0;
+    NSArray *list = [scales isKindOfClass:[NSArray class]] && scales.count
+                    ? scales : @[@0.8, @1.0, @1.2, @1.5];
+    for (NSNumber *sn in list) {
+        double sc = [sn doubleValue];
+        if (sc <= 0.1 || sc > 4.0) continue;
+        CGSize sz = CGSizeMake(tplImg.size.width * sc, tplImg.size.height * sc);
+        if (sz.width < 4 || sz.height < 4) continue;
+        if (sz.width > sceneImg.size.width || sz.height > sceneImg.size.height) continue;
+        UIGraphicsBeginImageContextWithOptions(sz, NO, 1.0);
+        [tplImg drawInRect:CGRectMake(0, 0, sz.width, sz.height)];
+        UIImage *scaled = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        NSDictionary *hit = YkMatchTemplate(sceneImg, scaled, threshold);
+        if (hit && [hit[@"score"] doubleValue] > bestScore) {
+            bestScore = [hit[@"score"] doubleValue];
+            best = hit; bestScale = sc;
+        }
+    }
+    if (usedScale) *usedScale = bestScale;
+    return best;
+}

@@ -98,6 +98,8 @@ static NSString *YkUUID40(void) {
 // ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
 static NSMutableDictionary *gImages = nil;
 extern NSDictionary *YkMatchTemplate(UIImage *scene, UIImage *tpl, double threshold);
+extern NSArray *YkMatchTemplateAll(UIImage *scene, UIImage *tpl, double threshold, NSInteger maxResults);
+extern NSDictionary *YkMatchTemplateScale(UIImage *scene, UIImage *tpl, double threshold, NSArray *scales, double *usedScale);
 
 static NSString *YkPathForImage(NSString *iid) {
     UIImage *img = iid ? gImages[iid] : nil;
@@ -495,8 +497,18 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             NSInteger maxN = [body[@"maxResults"] integerValue] ?: 100;
             BOOL all = [verb hasSuffix:@"All"];
             UIImage *tplImg = [UIImage imageWithContentsOfFile:tplPath];
+            if (!tplImg) return YKErr(@"not_found", @"模板文件不可读");
+            if ([verb hasPrefix:@"findImageScale"]) {
+                double used = 1.0;
+                NSDictionary *hit = YkMatchTemplateScale(src, tplImg, th, body[@"scales"], &used);
+                if (hit) { NSMutableDictionary *m = [hit mutableCopy]; m[@"scale"] = @(used); return @{ @"value": m }; }
+                return @{ @"value": [NSNull null] };
+            }
+            if ([verb hasSuffix:@"All"]) {
+                NSArray *hits = YkMatchTemplateAll(src, tplImg, th, maxN);
+                return @{ @"value": @{ @"count": @(hits.count), @"matches": hits } };
+            }
             NSDictionary *hit = YkMatchTemplate(src, tplImg, th);
-            if (all) return @{ @"value": @{ @"count": hit ? @1 : @0, @"matches": hit ? @[hit] : @[] } };
             return @{ @"value": hit ?: [NSNull null] };
         }
         if ([verb isEqualToString:@"releaseAll"]) { [gImages removeAllObjects]; return @{ @"value": @YES }; }
