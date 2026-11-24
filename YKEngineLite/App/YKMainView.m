@@ -61,7 +61,9 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     UILabel *title = [self ykLabel:@"远控 Pro" size:20 bold:YES color:[UIColor whiteColor]];
     title.textAlignment = NSTextAlignmentCenter;
     title.frame = CGRectMake(0, 30, W, 26);
-    [header addSubview:title];
+    title.backgroundColor = [UIColor clearColor];
+    [self addSubview:title];
+    [self bringSubviewToFront:title];
 
     UIButton *home = [UIButton buttonWithType:UIButtonTypeSystem];
     home.frame = CGRectMake(4, 20, 44, 44);
