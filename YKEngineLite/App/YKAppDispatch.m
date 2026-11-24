@@ -227,23 +227,18 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
         if ([verb isEqualToString:@"tab"]) {
             NSInteger idx = [body[@"i"] integerValue] ?: [query[@"i"] integerValue];
             __block BOOL ok = NO;
+            __block NSInteger idx2 = idx;
+            __block void (^find)(UIView *);
+            find = ^(UIView *v) {
+                if (!v || ok) return;
+                if ([v respondsToSelector:@selector(ykShowPage:)]) {
+                    [v performSelector:@selector(ykShowPage:) withObject:@(idx2)];
+                    ok = YES; return;
+                }
+                for (UIView *c in v.subviews) { find(c); if (ok) return; }
+            };
             void (^blk)(void) = ^{
-                UIWindow *w = nil;
-                for (UIWindow *win in UIApplication.sharedApplication.windows) {
-                    if (win.isKeyWindow) { w = win; break; }
-                }
-                for (UIView *v in w.subviews) {
-                    if ([v respondsToSelector:@selector(ykShowPage:)]) {
-                        [v performSelector:@selector(ykShowPage:) withObject:@(idx)];
-                        ok = YES; break;
-                    }
-                    for (UIView *s2 in v.subviews) {
-                        if ([s2 respondsToSelector:@selector(ykShowPage:)]) {
-                            [s2 performSelector:@selector(ykShowPage:) withObject:@(idx)];
-                            ok = YES; break;
-                        }
-                    }
-                }
+                for (UIWindow *win in UIApplication.sharedApplication.windows) { find(win); if (ok) break; }
             };
             if ([NSThread isMainThread]) blk(); else dispatch_sync(dispatch_get_main_queue(), blk);
             return @{ @"value": @{ @"page": @(idx), @"ok": @(ok) } };
