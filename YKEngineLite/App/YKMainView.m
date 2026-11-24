@@ -341,12 +341,10 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     _devScroll.hidden    = (i != 0);
     _scriptScroll.hidden = (i != 1);
     _recordScroll.hidden = (i != 2);
-    NSInteger n = 0;
     for (UIView *v in _bottomBar.subviews) {
         if ([v isKindOfClass:[UIButton class]]) {
             UIButton *b = (UIButton *)v;
             b.tintColor = (b.tag == i) ? YkTint() : YkSub();
-            n++;
         }
     }
 }
