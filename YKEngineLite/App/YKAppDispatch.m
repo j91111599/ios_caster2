@@ -231,8 +231,8 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             __block void (^find)(UIView *);
             find = ^(UIView *v) {
                 if (!v || ok) return;
-                if ([v respondsToSelector:@selector(ykShowPage:)]) {
-                    [v performSelector:@selector(ykShowPage:) withObject:@(idx2)];
+                if ([v respondsToSelector:@selector(ykShowPageObj:)]) {
+                    [v performSelector:@selector(ykShowPageObj:) withObject:@(idx2)];
                     ok = YES; return;
                 }
                 for (UIView *c in v.subviews) { find(c); if (ok) return; }

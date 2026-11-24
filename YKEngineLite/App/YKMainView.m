@@ -19,7 +19,7 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
 - (UIView *)ykCard:(CGRect)r;
 - (UIView *)ykBadge:(CGRect)r symbol:(NSString *)n;
 - (void)ykTab:(UIButton *)sender;
-- (void)ykShowPage:(NSInteger)i;
+- (void)ykShowPageObj:(id)o;
 @end
 
 @implementation YKMainView {
@@ -337,7 +337,8 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     }
 }
 
-- (void)ykShowPage:(NSInteger)i {
+- (void)ykShowPageObj:(id)o {
+    NSInteger i = [o isKindOfClass:[NSNumber class]] ? [o integerValue] : [o respondsToSelector:@selector(integerValue)] ? [o integerValue] : 0;
     _devScroll.hidden    = (i != 0);
     _scriptScroll.hidden = (i != 1);
     _recordScroll.hidden = (i != 2);
