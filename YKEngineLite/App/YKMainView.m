@@ -1,356 +1,224 @@
-//  YKMainView — 主屏 1:1 复刻（结构完全依据反编译 YKViewYyyy）
-//
-//  反编译依据（dump/project_rn/YKApp/YKViewYyyy.m，8,147 行 / 393 约束）：
-//    viewDidLoad:
-//        bg = colorWithRed:0.96 green:0.96 blue:0.98 alpha:1.0
-//        [self DtsYdatxijgQ69u0YcYvDfeHRigF6lHH]  → 挂载
-//        [self XVX3WBjfMW9EuO2xJYoObrmBSJlUVayr]  → 约束（25 条在单个方法内）
-//        [self vFu3Ezk0ARiNzjIrxFsVwsw1zYgIbbHx]  → contentStack 组装
-//    层级：
-//        view
-//        ├── headerView
-//        │   └── moreControl
-//        └── scrollView
-//            └── contentStack (vertical)
-//                ├── heroCard
-//                └── segmentControl
-//        bottomBar
-//        subscriptionDialogView / subscriptionOverlayView
-//
-//  间距常量（IEEE754 还原）：12 / 16 / 20 / 24 / 40 / 44 / 52（4pt 栅格）
+//  YKMainView — 按原版实测坐标复刻（frame 布局，无 Auto Layout）
+//  数据来源：dump/ORIG_UI_SPEC.md（原版 /element/tree 实测，像素 @2x → 此处已 /2 换算为 pt）
 
 #import <UIKit/UIKit.h>
 
-static const CGFloat kGutter   = 12.0;   // 0x4028…
-static const CGFloat kPad      = 16.0;   // 0x4030…
-static const CGFloat kRowBase  = 44.0;   // 0x4046…
-static const CGFloat kBadge    = 52.0;   // 0x404a…
-
-static UIColor *YkBlue(void)      { return [UIColor colorWithRed:0.13 green:0.60 blue:0.95 alpha:1]; }
-static UIColor *YkPageBg(void)    { return [UIColor colorWithRed:0.96 green:0.96 blue:0.98 alpha:1.0]; } // 反编译原值
-static UIColor *YkTintBlue(void)  { return [UIColor colorWithRed:0.91 green:0.95 blue:1.0 alpha:1]; }
-static UIColor *YkTintGray(void)  { return [UIColor colorWithWhite:0.94 alpha:1]; }
-static UIColor *YkTintRed(void)   { return [UIColor colorWithRed:0.99 green:0.93 blue:0.92 alpha:1]; }
-static UIColor *YkTitle(void)     { return [UIColor colorWithWhite:0.09 alpha:1]; }
-static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]; }
+static UIColor *YkBlue(void)   { return [UIColor colorWithRed:0.13 green:0.59 blue:0.95 alpha:1.0]; }
+static UIColor *YkPageBg(void) { return [UIColor colorWithRed:0.95 green:0.96 blue:0.97 alpha:1.0]; }
+static UIColor *YkSub(void)    { return [UIColor colorWithWhite:0.55 alpha:1.0]; }
+static UIColor *YkMain(void)   { return [UIColor colorWithWhite:0.13 alpha:1.0]; }
+static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 blue:0.95 alpha:1.0]; }
 
 @interface YKMainView : UIView
-@property (nonatomic, strong) UIView *headerView;
-@property (nonatomic, strong) UIButton *moreControl;
-@property (nonatomic, strong) UIScrollView *scrollView;
-@property (nonatomic, strong) UIStackView *contentStack;
-@property (nonatomic, strong) UIView *heroCard;
-@property (nonatomic, strong) UISegmentedControl *segmentControl;
-@property (nonatomic, strong) UIView *bottomBar;
-@property (nonatomic, strong) UILabel *pageLabel;
 @end
 
 @implementation YKMainView
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
-        self.backgroundColor = YkPageBg();      // 反编译实测底色
-        [self buildHeader];
-        [self buildScrollAndStack];
-        [self buildHeroCard];
-        [self buildSegmentControl];
-        [self buildBottomBar];
-        [self installConstraints];
+        self.backgroundColor = YkPageBg();
+        [self ykBuild];
     }
     return self;
 }
 
-#pragma mark - headerView + moreControl
-
-- (void)buildHeader {
-    _headerView = [UIView new];
-    _headerView.translatesAutoresizingMaskIntoConstraints = NO;
-    _headerView.backgroundColor = YkBlue();
-    [self addSubview:_headerView];
-
-    UILabel *title = [UILabel new];
-    title.text = @"远控 Pro";
-    title.font = [UIFont boldSystemFontOfSize:24];
-    title.textColor = [UIColor whiteColor];
-    title.translatesAutoresizingMaskIntoConstraints = NO;
-    [_headerView addSubview:title];
-
-    _moreControl = [UIButton buttonWithType:UIButtonTypeSystem];
-    [_moreControl setImage:[UIImage systemImageNamed:@"ellipsis.circle"] forState:UIControlStateNormal];
-    _moreControl.tintColor = [UIColor whiteColor];
-    _moreControl.translatesAutoresizingMaskIntoConstraints = NO;
-    [_headerView addSubview:_moreControl];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [title.centerXAnchor constraintEqualToAnchor:_headerView.centerXAnchor],
-        [title.bottomAnchor constraintEqualToAnchor:_headerView.bottomAnchor constant:-10.0],
-        [_moreControl.trailingAnchor constraintEqualToAnchor:_headerView.trailingAnchor constant:-kPad],
-        [_moreControl.centerYAnchor constraintEqualToAnchor:title.centerYAnchor],
-        [_moreControl.widthAnchor constraintEqualToConstant:kRowBase],
-        [_moreControl.heightAnchor constraintEqualToConstant:kRowBase],
-    ]];
+- (UILabel *)ykLabel:(NSString *)text size:(CGFloat)sz bold:(BOOL)b color:(UIColor *)c {
+    UILabel *l = [UILabel new];
+    l.text = text;
+    l.font = b ? [UIFont boldSystemFontOfSize:sz] : [UIFont systemFontOfSize:sz];
+    l.textColor = c ?: YkMain();
+    return l;
 }
 
-#pragma mark - scrollView + contentStack
-
-- (void)buildScrollAndStack {
-    _scrollView = [UIScrollView new];
-    _scrollView.translatesAutoresizingMaskIntoConstraints = NO;
-    _scrollView.showsVerticalScrollIndicator = NO;
-    [self addSubview:_scrollView];
-
-    _contentStack = [UIStackView new];
-    _contentStack.axis = UILayoutConstraintAxisVertical;
-    _contentStack.spacing = kPad;              // 16
-    _contentStack.alignment = UIStackViewAlignmentFill;
-    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
-    [_scrollView addSubview:_contentStack];
+- (UIView *)ykCardAt:(CGRect)r {
+    UIView *v = [[UIView alloc] initWithFrame:r];
+    v.backgroundColor = [UIColor whiteColor];
+    v.layer.cornerRadius = 14.0;
+    return v;
 }
 
-#pragma mark - heroCard（= 反编译 heroCard，内含连接设备区）
-
-- (void)buildHeroCard {
-    _heroCard = [UIView new];
-    _heroCard.backgroundColor = [UIColor whiteColor];
-    _heroCard.layer.cornerRadius = 18.0;
-    _heroCard.translatesAutoresizingMaskIntoConstraints = NO;
-    [_contentStack addArrangedSubview:_heroCard];
-
-    // 卡片头：图标 + 标题 + 扫码
-    UIView *icon = [self badge:@"dot.radiowaves.left.and.right" bg:YkTintBlue() tint:YkBlue() round:YES];
-    icon.translatesAutoresizingMaskIntoConstraints = NO;
-    [_heroCard addSubview:icon];
-
-    UILabel *title = [UILabel new];
-    title.text = @"连接设备";
-    title.font = [UIFont boldSystemFontOfSize:21];
-    title.textColor = YkTitle();
-    title.translatesAutoresizingMaskIntoConstraints = NO;
-    [_heroCard addSubview:title];
-
-    UIButton *scan = [UIButton buttonWithType:UIButtonTypeSystem];
-    [scan setTitle:@"扫码连接" forState:UIControlStateNormal];
-    [scan setImage:[UIImage systemImageNamed:@"qrcode.viewfinder"] forState:UIControlStateNormal];
-    scan.tintColor = YkBlue();
-    scan.backgroundColor = YkTintBlue();
-    scan.titleLabel.font = [UIFont boldSystemFontOfSize:14];
-    scan.layer.cornerRadius = 10;
-    scan.translatesAutoresizingMaskIntoConstraints = NO;
-    [_heroCard addSubview:scan];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [icon.leadingAnchor constraintEqualToAnchor:_heroCard.leadingAnchor constant:kPad],
-        [icon.topAnchor constraintEqualToAnchor:_heroCard.topAnchor constant:kPad],
-        [icon.widthAnchor constraintEqualToConstant:38.0],
-        [icon.heightAnchor constraintEqualToConstant:38.0],
-        [title.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:kGutter],
-        [title.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
-        [scan.trailingAnchor constraintEqualToAnchor:_heroCard.trailingAnchor constant:-kPad],
-        [scan.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
-        [scan.widthAnchor constraintEqualToConstant:114.0],
-        [scan.heightAnchor constraintEqualToConstant:38.0],
-    ]];
-
-    // 三行：服务开关 / 广域网 / 未连接设备（对应反编译三组约束）
-    UIView *r1 = [self row:@"服务开关" sub:@"允许局域网电脑接入当前设备"
-                     tint:YkTintBlue() icon:@"bolt.fill" trailing:@"switch"];
-    UIView *r2 = [self row:@"广域网" sub:@"允许外网通过安全隧道接入当前设备"
-                     tint:YkTintGray() icon:@"globe" trailing:@"switch"];
-    UIView *r3 = [self row:@"未连接设备" sub:@"当前暂无电脑接入"
-                     tint:YkTintGray() icon:@"display" trailing:@"pill"];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [r1.topAnchor constraintEqualToAnchor:icon.bottomAnchor constant:kPad],
-        [r2.topAnchor constraintEqualToAnchor:r1.bottomAnchor constant:kPad],
-        [r3.topAnchor constraintEqualToAnchor:r2.bottomAnchor constant:kPad],
-        [r3.bottomAnchor constraintEqualToAnchor:_heroCard.bottomAnchor constant:-kPad],
-    ]];
-}
-
-- (UIView *)row:(NSString *)title sub:(NSString *)sub
-           tint:(UIColor *)tint icon:(NSString *)sym trailing:(NSString *)kind {
-    UIView *row = [UIView new];
-    row.backgroundColor = tint;
-    row.layer.cornerRadius = 14;
-    row.translatesAutoresizingMaskIntoConstraints = NO;
-    [_heroCard addSubview:row];
-
-    UIView *badge = [self badge:sym bg:[UIColor colorWithWhite:1 alpha:0.9] tint:YkBlue() round:YES];
-    badge.translatesAutoresizingMaskIntoConstraints = NO;
-    [row addSubview:badge];
-
-    UILabel *t = [UILabel new];
-    t.text = title;
-    t.font = [UIFont boldSystemFontOfSize:17];
-    t.textColor = YkTitle();
-    t.translatesAutoresizingMaskIntoConstraints = NO;
-    [row addSubview:t];
-
-    UILabel *s = [UILabel new];
-    s.text = sub;
-    s.font = [UIFont systemFontOfSize:12];
-    s.textColor = YkSub();
-    s.translatesAutoresizingMaskIntoConstraints = NO;
-    [row addSubview:s];
-
-    NSMutableArray *c = [NSMutableArray arrayWithArray:@[
-        [row.leadingAnchor constraintEqualToAnchor:_heroCard.leadingAnchor constant:kGutter],
-        [row.trailingAnchor constraintEqualToAnchor:_heroCard.trailingAnchor constant:-kGutter],
-        [row.heightAnchor constraintGreaterThanOrEqualToConstant:kBadge + 24.0],   // 52 + 24
-        [badge.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:14.0],
-        [badge.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-        [badge.widthAnchor constraintEqualToConstant:kBadge],
-        [badge.heightAnchor constraintEqualToConstant:kBadge],
-        [t.leadingAnchor constraintEqualToAnchor:badge.trailingAnchor constant:kPad],
-        [t.topAnchor constraintEqualToAnchor:badge.topAnchor constant:2.0],
-        [s.leadingAnchor constraintEqualToAnchor:t.leadingAnchor],
-        [s.topAnchor constraintEqualToAnchor:t.bottomAnchor constant:2.0],
-    ]];
-
-    if ([kind isEqualToString:@"switch"]) {
-        UISwitch *sw = [UISwitch new];
-        sw.onTintColor = YkBlue();
-        sw.translatesAutoresizingMaskIntoConstraints = NO;
-        [row addSubview:sw];
-        [c addObjectsFromArray:@[
-            [sw.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14.0],
-            [sw.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [t.trailingAnchor constraintLessThanOrEqualToAnchor:sw.leadingAnchor constant:-8.0],
-        ]];
-    } else {
-        UILabel *p = [UILabel new];
-        p.text = @"待接入";
-        p.font = [UIFont systemFontOfSize:13];
-        p.textColor = YkSub();
-        p.textAlignment = NSTextAlignmentCenter;
-        p.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1];
-        p.layer.cornerRadius = 17;
-        p.layer.masksToBounds = YES;
-        p.translatesAutoresizingMaskIntoConstraints = NO;
-        [row addSubview:p];
-        [c addObjectsFromArray:@[
-            [p.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14.0],
-            [p.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [p.widthAnchor constraintEqualToConstant:84.0],
-            [p.heightAnchor constraintEqualToConstant:34.0],
-            [t.trailingAnchor constraintLessThanOrEqualToAnchor:p.leadingAnchor constant:-8.0],
-        ]];
-    }
-    [NSLayoutConstraint activateConstraints:c];
-    return row;
-}
-
-#pragma mark - segmentControl（反编译 segmentControl）
-
-- (void)buildSegmentControl {
-    _segmentControl = [[UISegmentedControl alloc] initWithItems:@[@"设备", @"脚本", @"录制"]];
-    _segmentControl.selectedSegmentIndex = 0;
-    _segmentControl.translatesAutoresizingMaskIntoConstraints = NO;
-    [_contentStack addArrangedSubview:_segmentControl];
-    [_segmentControl.heightAnchor constraintEqualToConstant:kRowBase].active = YES;
-    [_segmentControl addTarget:self action:@selector(ykSegChanged:)
-              forControlEvents:UIControlEventValueChanged];
-    _pageLabel = [UILabel new];
-    _pageLabel.text = @"设备页 · 本机引擎 65324";
-    _pageLabel.font = [UIFont systemFontOfSize:14];
-    _pageLabel.textColor = [UIColor secondaryLabelColor];
-    _pageLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [_contentStack addArrangedSubview:_pageLabel];
-}
-
-#pragma mark - bottomBar（反编译 bottomBar）
-
-- (void)buildBottomBar {
-    _bottomBar = [UIView new];
-    _bottomBar.backgroundColor = [UIColor colorWithWhite:1 alpha:0.97];
-    _bottomBar.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:_bottomBar];
-
-    NSArray *tabs = @[ @[@"iphone", @"设备"], @[@"terminal", @"脚本"], @[@"record.circle", @"录制"] ];
-    NSMutableArray *cols = [NSMutableArray array];
-    for (NSUInteger i = 0; i < tabs.count; i++) {
-        BOOL sel = (i == 0);
-        UIColor *c = sel ? YkBlue() : YkSub();
-        UIButton *col = [UIButton buttonWithType:UIButtonTypeCustom];
-        col.translatesAutoresizingMaskIntoConstraints = NO;
-        [col setImage:[UIImage systemImageNamed:tabs[i][0]] forState:UIControlStateNormal];
-        [col setTitle:tabs[i][1] forState:UIControlStateNormal];
-        col.tintColor = c;
-        [col setTitleColor:c forState:UIControlStateNormal];
-        col.titleLabel.font = [UIFont systemFontOfSize:12];
-        col.contentEdgeInsets = UIEdgeInsetsMake(0, 0, -18, 0);
-        [_bottomBar addSubview:col];
-        [cols addObject:col];
-    }
-
-    UIView *c0 = cols[0], *c1 = cols[1], *c2 = cols[2];
-    [NSLayoutConstraint activateConstraints:@[
-        [c0.leadingAnchor constraintEqualToAnchor:_bottomBar.leadingAnchor],
-        [c0.widthAnchor constraintEqualToAnchor:_bottomBar.widthAnchor multiplier:1.0 / 3.0],
-        [c1.leadingAnchor constraintEqualToAnchor:c0.trailingAnchor],
-        [c1.widthAnchor constraintEqualToAnchor:c0.widthAnchor],
-        [c2.leadingAnchor constraintEqualToAnchor:c1.trailingAnchor],
-        [c2.widthAnchor constraintEqualToAnchor:c0.widthAnchor],
-    ]];
-    for (UIView *col in cols) {
-        [NSLayoutConstraint activateConstraints:@[
-            [col.topAnchor constraintEqualToAnchor:_bottomBar.topAnchor],
-            [col.heightAnchor constraintEqualToConstant:70.0],
-        ]];
-    }
-}
-
-#pragma mark - 总约束
-
-- (void)installConstraints {
-    [NSLayoutConstraint activateConstraints:@[
-        [_headerView.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_headerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_headerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_headerView.heightAnchor constraintEqualToConstant:88.0],
-
-        [_scrollView.topAnchor constraintEqualToAnchor:_headerView.bottomAnchor],
-        [_scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_scrollView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_scrollView.bottomAnchor constraintEqualToAnchor:_bottomBar.topAnchor],
-
-        [_contentStack.topAnchor constraintEqualToAnchor:_scrollView.topAnchor constant:kPad],
-        [_contentStack.leadingAnchor constraintEqualToAnchor:_scrollView.leadingAnchor constant:kGutter],
-        [_contentStack.trailingAnchor constraintEqualToAnchor:_scrollView.trailingAnchor constant:-kGutter],
-        [_contentStack.bottomAnchor constraintEqualToAnchor:_scrollView.bottomAnchor constant:-kPad],
-        [_contentStack.widthAnchor constraintEqualToAnchor:_scrollView.widthAnchor
-                                               constant:-(kGutter * 2)],
-
-        [_bottomBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_bottomBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_bottomBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [_bottomBar.heightAnchor constraintEqualToConstant:88.0],
-    ]];
-}
-
-#pragma mark - 通用
-
-- (UIView *)badge:(NSString *)sym bg:(UIColor *)bg tint:(UIColor *)tint round:(BOOL)round {
-    UIView *box = [UIView new];
-    box.backgroundColor = bg;
-    box.layer.cornerRadius = round ? 19.0 : 12.0;
-    UIImageView *iv = [[UIImageView alloc] initWithImage:
-        [UIImage systemImageNamed:sym withConfiguration:
-            [UIImageSymbolConfiguration configurationWithPointSize:19 weight:UIImageSymbolWeightSemibold]]];
-    iv.tintColor = tint;
-    iv.translatesAutoresizingMaskIntoConstraints = NO;
+- (UIView *)ykBadge:(CGRect)r symbol:(NSString *)name {
+    UIView *box = [[UIView alloc] initWithFrame:r];
+    box.backgroundColor = [YkTint() colorWithAlphaComponent:0.10];
+    box.layer.cornerRadius = 12.0;
+    UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake((r.size.width-22)/2,(r.size.height-22)/2,22,22)];
+    iv.image = [UIImage systemImageNamed:name];
+    iv.tintColor = YkTint();
+    iv.contentMode = UIViewContentModeScaleAspectFit;
     [box addSubview:iv];
-    [NSLayoutConstraint activateConstraints:@[
-        [iv.centerXAnchor constraintEqualToAnchor:box.centerXAnchor],
-        [iv.centerYAnchor constraintEqualToAnchor:box.centerYAnchor],
-    ]];
     return box;
 }
 
-- (void)ykSegChanged:(UISegmentedControl *)sc {
-    NSArray *names = @[@"设备页 · 本机引擎 65324", @"脚本页 · /executor/scripts", @"录制页 · /record/tasks"];
-    NSInteger i = sc.selectedSegmentIndex;
-    if (i >= 0 && i < (NSInteger)names.count) _pageLabel.text = names[i];
+- (void)ykBuild {
+    CGFloat W = self.bounds.size.width  > 1 ? self.bounds.size.width  : 375.0;
+    CGFloat H = self.bounds.size.height > 1 ? self.bounds.size.height : 667.0;
+
+    // ===== 顶部 =====
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, W, 100)];
+    header.backgroundColor = YkBlue();
+    [self addSubview:header];
+
+    UILabel *title = [self ykLabel:@"远控 Pro" size:20 bold:YES color:[UIColor whiteColor]];
+    title.textAlignment = NSTextAlignmentCenter;
+    title.frame = CGRectMake((W-100)/2, 30, 100, 24);
+    [header addSubview:title];
+
+    UIButton *home = [UIButton buttonWithType:UIButtonTypeSystem];
+    home.frame = CGRectMake(4, 20, 44, 44);
+    [home setImage:[UIImage systemImageNamed:@"house.fill"] forState:UIControlStateNormal];
+    home.tintColor = [UIColor whiteColor];
+    [header addSubview:home];
+
+    UIButton *more = [UIButton buttonWithType:UIButtonTypeSystem];
+    more.frame = CGRectMake(W-48, 20, 44, 44);
+    [more setImage:[UIImage systemImageNamed:@"ellipsis.circle"] forState:UIControlStateNormal];
+    more.tintColor = [UIColor whiteColor];
+    [header addSubview:more];
+
+    // ===== 内容 =====
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 100, W, H-168)];
+    scroll.showsVerticalScrollIndicator = YES;
+    [self addSubview:scroll];
+
+    // 卡片一：连接设备
+    UIView *c1 = [self ykCardAt:CGRectMake(12, 0, W-24, 220)];
+    [scroll addSubview:c1];
+    UILabel *t1 = [self ykLabel:@"连接设备" size:17 bold:YES color:YkMain()];
+    t1.frame = CGRectMake(74, 14, 130, 22);
+    [c1 addSubview:t1];
+    [c1 addSubview:[self ykBadge:CGRectMake(16, 10, 44, 44) symbol:@"wifi"]];
+
+    UIButton *scan = [UIButton buttonWithType:UIButtonTypeSystem];
+    scan.frame = CGRectMake(c1.bounds.size.width-108, 10, 96, 36);
+    [scan setTitle:@"扫码连接" forState:UIControlStateNormal];
+    scan.titleLabel.font = [UIFont boldSystemFontOfSize:13];
+    scan.backgroundColor = [YkTint() colorWithAlphaComponent:0.12];
+    scan.layer.cornerRadius = 10.0;
+    [scan setTitleColor:YkTint() forState:UIControlStateNormal];
+    [c1 addSubview:scan];
+
+    NSArray *rows = @[ @[@"服务开关", @"允许局域网电脑接入当前设备", @"bolt.fill"],
+                       @[@"广域网",   @"允许外网通过安全隧道接入当前设备", @"globe"],
+                       @[@"未连接设备", @"当前暂无电脑接入", @"desktopcomputer"] ];
+    CGFloat rowY = 62;
+    for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+        NSArray *r = rows[i];
+        UIView *row = [[UIView alloc] initWithFrame:CGRectMake(8, rowY, c1.bounds.size.width-16, 52)];
+        row.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1.0];
+        row.layer.cornerRadius = 12.0;
+        [c1 addSubview:row];
+
+        [row addSubview:[self ykBadge:CGRectMake(6, 4, 44, 44) symbol:r[2]]];
+        UILabel *tt = [self ykLabel:r[0] size:15 bold:YES color:YkMain()];
+        tt.frame = CGRectMake(58, 7, 170, 19);
+        [row addSubview:tt];
+        UILabel *ss = [self ykLabel:r[1] size:10.5 bold:NO color:YkSub()];
+        ss.frame = CGRectMake(58, 27, 195, 14);
+        [row addSubview:ss];
+
+        if (i < 2) {
+            UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(row.bounds.size.width-66, 10, 51, 31)];
+            sw.on = (i == 0);
+            sw.onTintColor = YkTint();
+            [row addSubview:sw];
+        } else {
+            UILabel *pill = [self ykLabel:@"待接入" size:13 bold:NO color:YkSub()];
+            pill.textAlignment = NSTextAlignmentCenter;
+            pill.frame = CGRectMake(row.bounds.size.width-72, 16, 62, 20);
+            [row addSubview:pill];
+        }
+        rowY += 58;
+    }
+
+    // 卡片二：运行状态
+    UIView *c2 = [self ykCardAt:CGRectMake(12, 232, W-24, 150)];
+    [scroll addSubview:c2];
+    UILabel *t2 = [self ykLabel:@"运行状态" size:17 bold:YES color:YkMain()];
+    t2.frame = CGRectMake(74, 14, 130, 22);
+    [c2 addSubview:t2];
+    [c2 addSubview:[self ykBadge:CGRectMake(16, 10, 44, 44) symbol:@"chart.bar.fill"]];
+
+    NSArray *kv = @[ @[@"设备 IP", @"192.168.1.43", @"越狱方式", @"隐根"],
+                     @[@"系统分辨率", @"750×1334", @"应用版本", @"3.9.5"] ];
+    for (NSInteger i = 0; i < (NSInteger)kv.count; i++) {
+        NSArray *r = kv[i];
+        CGFloat y = 62 + i * 42;
+        UILabel *k1 = [self ykLabel:r[0] size:11 bold:NO color:YkSub()];
+        k1.frame = CGRectMake(36, y, 90, 15); [c2 addSubview:k1];
+        UILabel *v1 = [self ykLabel:r[1] size:14 bold:YES color:YkMain()];
+        v1.frame = CGRectMake(36, y+15, 116, 20); [c2 addSubview:v1];
+        UILabel *k2 = [self ykLabel:r[2] size:11 bold:NO color:YkSub()];
+        k2.frame = CGRectMake(190, y, 90, 15); [c2 addSubview:k2];
+        UILabel *v2 = [self ykLabel:r[3] size:14 bold:YES color:YkMain()];
+        v2.frame = CGRectMake(190, y+15, 116, 20); [c2 addSubview:v2];
+    }
+
+    // 卡片三：设备信息
+    UIView *c3 = [self ykCardAt:CGRectMake(12, 394, W-24, 190)];
+    [scroll addSubview:c3];
+    UILabel *t3 = [self ykLabel:@"设备信息" size:17 bold:YES color:YkMain()];
+    t3.frame = CGRectMake(74, 14, 130, 22);
+    [c3 addSubview:t3];
+    [c3 addSubview:[self ykBadge:CGRectMake(16, 10, 44, 44) symbol:@"gearshape.fill"]];
+
+    UILabel *n1 = [self ykLabel:@"设备名称" size:11 bold:NO color:YkSub()];
+    n1.frame = CGRectMake(24, 64, 200, 15); [c3 addSubview:n1];
+    UILabel *nv = [self ykLabel:@"iPhone" size:14 bold:YES color:YkMain()];
+    nv.frame = CGRectMake(38, 84, 230, 20); [c3 addSubview:nv];
+
+    UILabel *n2 = [self ykLabel:@"设备 ID" size:11 bold:NO color:YkSub()];
+    n2.frame = CGRectMake(24, 118, 200, 15); [c3 addSubview:n2];
+    UILabel *nv2 = [self ykLabel:@"1983fed10d4062e506291b023e92c27cc6e470bf"
+                            size:10 bold:NO color:YkMain()];
+    nv2.frame = CGRectMake(38, 138, 300, 32);
+    nv2.numberOfLines = 2;
+    [c3 addSubview:nv2];
+
+    // 卡片四：重启用户空间
+    UIView *c4 = [self ykCardAt:CGRectMake(12, 596, W-24, 112)];
+    [scroll addSubview:c4];
+    UILabel *t4 = [self ykLabel:@"重启用户空间" size:17 bold:YES color:YkMain()];
+    t4.frame = CGRectMake(74, 14, 170, 22);
+    [c4 addSubview:t4];
+    [c4 addSubview:[self ykBadge:CGRectMake(16, 10, 44, 44) symbol:@"arrow.clockwise"]];
+
+    UILabel *tip1 = [self ykLabel:@"提示" size:13 bold:YES color:YkMain()];
+    tip1.frame = CGRectMake(74, 60, 120, 18); [c4 addSubview:tip1];
+    UILabel *tip2 = [self ykLabel:@"将直接重启用户空间，并断开当前 PC 连接，仅在异常时使用"
+                            size:12 bold:NO color:YkSub()];
+    tip2.frame = CGRectMake(74, 80, W-110, 32);
+    tip2.numberOfLines = 2;
+    [c4 addSubview:tip2];
+
+    scroll.contentSize = CGSizeMake(W, 720);
+
+    // ===== 底部导航（原版 y=1198px=599pt，三按钮 w=110 h=60）=====
+    UIView *bar = [[UIView alloc] initWithFrame:CGRectMake(0, H-68, W, 68)];
+    bar.backgroundColor = [UIColor whiteColor];
+    [self addSubview:bar];
+
+    NSArray *names = @[@"设备", @"脚本", @"录制"];
+    NSArray *icons = @[@"iphone", @"terminal", @"record.circle"];
+    for (NSInteger i = 0; i < 3; i++) {
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        b.frame = CGRectMake(22 + i * 110, 6, 110, 56);
+        b.tag = i;
+        [b setTitle:names[i] forState:UIControlStateNormal];
+        [b setImage:[UIImage systemImageNamed:icons[i]] forState:UIControlStateNormal];
+        b.titleLabel.font = [UIFont systemFontOfSize:11];
+        b.tintColor = (i == 0) ? YkTint() : YkSub();
+        [b addTarget:self action:@selector(ykTab:) forControlEvents:UIControlEventTouchUpInside];
+        [bar addSubview:b];
+    }
+}
+
+- (void)ykTab:(UIButton *)sender {
+    for (UIView *v in sender.superview.subviews) {
+        if ([v isKindOfClass:[UIButton class]]) {
+            UIButton *b = (UIButton *)v;
+            b.tintColor = (b.tag == sender.tag) ? YkTint() : YkSub();
+        }
+    }
 }
 
 @end
