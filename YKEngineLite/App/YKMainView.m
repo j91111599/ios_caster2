@@ -176,6 +176,14 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     nv2.numberOfLines = 2;
     [c3 addSubview:nv2];
 
+    // 设备 ID 的复制按钮（原版 x=566,y=1820,w=80,h=80 → 283,910,40,40）
+    UIButton *copyBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    copyBtn.frame = CGRectMake(c3.bounds.size.width-52, 132, 40, 40);
+    [copyBtn setImage:[UIImage systemImageNamed:@"doc.on.doc"] forState:UIControlStateNormal];
+    copyBtn.tintColor = YkSub();
+    [copyBtn addTarget:self action:@selector(ykCopyID:) forControlEvents:UIControlEventTouchUpInside];
+    [c3 addSubview:copyBtn];
+
     // 卡片四：重启用户空间
     UIView *c4 = [self ykCardAt:CGRectMake(12, 596, W-24, 112)];
     [scroll addSubview:c4];
