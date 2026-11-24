@@ -12,6 +12,12 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
 @interface YKMainView : UIView
 @property (nonatomic, strong) UIView *pageScript;
 @property (nonatomic, strong) UIView *pageRecord;
+- (UIView *)ykListPage:(NSString *)title hint:(NSString *)hint;
+- (void)ykTab:(UIButton *)sender;
+- (void)ykCopyID:(UIButton *)sender;
+- (UILabel *)ykLabel:(NSString *)text size:(CGFloat)sz bold:(BOOL)b color:(UIColor *)c;
+- (UIView *)ykCardAt:(CGRect)r;
+- (UIView *)ykBadge:(CGRect)r symbol:(NSString *)name;
 @end
 
 @implementation YKMainView
