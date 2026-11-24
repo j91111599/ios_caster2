@@ -10,6 +10,8 @@ static UIColor *YkMain(void)   { return [UIColor colorWithWhite:0.13 alpha:1.0];
 static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 blue:0.95 alpha:1.0]; }
 
 @interface YKMainView : UIView
+@property (nonatomic, strong) UIView *pageScript;
+@property (nonatomic, strong) UIView *pageRecord;
 @end
 
 @implementation YKMainView
@@ -81,6 +83,13 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 100, W, H-168)];
     scroll.showsVerticalScrollIndicator = YES;
     [self addSubview:scroll];
+
+    // 脚本页 / 录制页（默认隐藏，覆盖在内容区）
+    _pageScript = [self ykListPage:@"脚本" hint:@"暂无脚本，等待 PC 端下发"];
+    _pageRecord = [self ykListPage:@"录制" hint:@"暂无录制任务"];
+    _pageScript.hidden = YES; _pageRecord.hidden = YES;
+    _pageScript.frame = scroll.frame; _pageRecord.frame = scroll.frame;
+    [self addSubview:_pageScript]; [self addSubview:_pageRecord];
 
     // 卡片一：连接设备
     UIView *c1 = [self ykCardAt:CGRectMake(12, 0, W-24, 220)];
@@ -228,6 +237,16 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
             UIButton *b = (UIButton *)v;
             b.tintColor = (b.tag == sender.tag) ? YkTint() : YkSub();
         }
+    }
+    // 切页：0=设备 1=脚本 2=录制
+    _pageScript.hidden = (sender.tag != 1);
+    _pageRecord.hidden = (sender.tag != 2);
+    for (UIView *sv in self.subviews) {
+        if ([sv isKindOfClass:[UIScrollView class]]) sv.hidden = (sender.tag != 0);
+    }
+    if (sender.tag != 0) {
+        _pageScript.frame = CGRectMake(0, 100, self.bounds.size.width, self.bounds.size.height - 168);
+        _pageRecord.frame = _pageScript.frame;
     }
 }
 
