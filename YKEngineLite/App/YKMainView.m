@@ -15,11 +15,17 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
 @property (nonatomic, strong) UIScrollView *scriptScroll;
 @property (nonatomic, strong) UIScrollView *recordScroll;
 @property (nonatomic, strong) UIView *bottomBar;
+@property (nonatomic, strong) UILabel *lblHttpStatus;
+@property (nonatomic, strong) UILabel *lblPort;
+@property (nonatomic, strong) UILabel *lblState;
+@property (nonatomic, strong) UILabel *lblScriptCount;
+@property (nonatomic, strong) UILabel *lblScriptEmpty;
 - (UILabel *)ykLabel:(NSString *)t size:(CGFloat)s bold:(BOOL)b color:(UIColor *)c;
 - (UIView *)ykCard:(CGRect)r;
 - (UIView *)ykBadge:(CGRect)r symbol:(NSString *)n;
 - (void)ykTab:(UIButton *)sender;
 - (void)ykShowPageObj:(id)o;
+- (void)ykReloadScripts;
 @end
 
 @implementation YKMainView {
@@ -219,9 +225,12 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
         k2.frame = CGRectMake(190, y, 90, 15); [c1 addSubview:k2];
         UILabel *v2 = [self ykLabel:r[3] size:14 bold:YES color:YkMain()];
         v2.frame = CGRectMake(190, y+15, 116, 20); [c1 addSubview:v2];
+        if (i == 0) { _lblHttpStatus = v1; _lblState = v2; }
+        else        { _lblPort = v1; _lblScriptCount = v2; }
     }
     UILabel *h1 = [self ykLabel:@"设备可通过互联网远程调试" size:12 bold:NO color:YkSub()];
     h1.frame = CGRectMake(36, 200, 300, 18); [c1 addSubview:h1];
+
 
     UIView *c2 = [self ykCard:CGRectMake(12, 262, _W-24, 96)];
     [_scriptScroll addSubview:c2];
@@ -244,12 +253,14 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     refresh.backgroundColor = [YkTint() colorWithAlphaComponent:0.12];
     refresh.layer.cornerRadius = 9.0;
     [refresh setTitleColor:YkTint() forState:UIControlStateNormal];
+    [refresh addTarget:self action:@selector(ykReloadScripts) forControlEvents:UIControlEventTouchUpInside];
     [c3 addSubview:refresh];
 
     UILabel *empty = [self ykLabel:@"暂无订阅脚本" size:13 bold:NO color:YkSub()];
     empty.textAlignment = NSTextAlignmentCenter;
     empty.frame = CGRectMake(0, 90, c3.bounds.size.width, 20);
     [c3 addSubview:empty];
+    _lblScriptEmpty = empty;
     UILabel *hint = [self ykLabel:@"刷新脚本列表" size:12 bold:NO color:YkSub()];
     hint.textAlignment = NSTextAlignmentCenter;
     hint.frame = CGRectMake(0, 114, c3.bounds.size.width, 18);
@@ -337,11 +348,40 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     }
 }
 
+- (void)ykHTTP:(NSString *)path done:(void (^)(NSDictionary *))done {
+    NSURL *u = [NSURL URLWithString:[@"http://127.0.0.1:65324" stringByAppendingString:path]];
+    [[[NSURLSession sharedSession] dataTaskWithURL:u
+        completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+        NSDictionary *j = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
+        dispatch_async(dispatch_get_main_queue(), ^{ if (done) done(j); });
+    }] resume];
+}
+
+- (void)ykReloadScripts {
+    __weak typeof(self) ws = self;
+    [self ykHTTP:@"/health" done:^(NSDictionary *j) {
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        BOOL ready = [j[@"value"][@"ready"] boolValue];
+        sf.lblHttpStatus.text = ready ? @"正常" : @"异常";
+        sf.lblHttpStatus.textColor = ready ? YkTint() : [UIColor systemRedColor];
+        sf.lblPort.text = [NSString stringWithFormat:@"%@", j[@"value"][@"port"] ?: @"—"];
+        sf.lblState.text = ready ? @"已开启" : @"已关闭";
+    }];
+    [self ykHTTP:@"/executor/scripts" done:^(NSDictionary *j) {
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        NSArray *list = j[@"value"][@"scripts"];
+        sf.lblScriptCount.text = [NSString stringWithFormat:@"%lu", (unsigned long)list.count];
+        sf.lblScriptEmpty.text = list.count ? [NSString stringWithFormat:@"共 %lu 个脚本", (unsigned long)list.count]
+                                            : @"暂无订阅脚本";
+    }];
+}
+
 - (void)ykShowPageObj:(id)o {
     NSInteger i = [o isKindOfClass:[NSNumber class]] ? [o integerValue] : [o respondsToSelector:@selector(integerValue)] ? [o integerValue] : 0;
     _devScroll.hidden    = (i != 0);
     _scriptScroll.hidden = (i != 1);
     _recordScroll.hidden = (i != 2);
+    if (i == 1) [self ykReloadScripts];
     for (UIView *v in _bottomBar.subviews) {
         if ([v isKindOfClass:[UIButton class]]) {
             UIButton *b = (UIButton *)v;
