@@ -54,7 +54,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
         [self buildScrollAndStack];
         [self buildHeroCard];
         [self buildSegmentControl];
-        // bottomBar 与 segmentControl 重复
+        [self buildBottomBar];
         [self installConstraints];
     }
     return self;
@@ -83,8 +83,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 
     [NSLayoutConstraint activateConstraints:@[
         [title.centerXAnchor constraintEqualToAnchor:_headerView.centerXAnchor],
-        [title.topAnchor constraintEqualToAnchor:_headerView.topAnchor constant:30.0],
-        [title.heightAnchor constraintEqualToConstant:24.0],
+        [title.bottomAnchor constraintEqualToAnchor:_headerView.bottomAnchor constant:-10.0],
         [_moreControl.trailingAnchor constraintEqualToAnchor:_headerView.trailingAnchor constant:-kPad],
         [_moreControl.centerYAnchor constraintEqualToAnchor:title.centerYAnchor],
         [_moreControl.widthAnchor constraintEqualToConstant:kRowBase],
@@ -247,15 +246,16 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
     _segmentControl = [[UISegmentedControl alloc] initWithItems:@[@"设备", @"脚本", @"录制"]];
     _segmentControl.selectedSegmentIndex = 0;
     _segmentControl.translatesAutoresizingMaskIntoConstraints = NO;
-    // 原版无分段控件（实测 /element/tree），不加入内容栈
-    // 分段控件已按原版移除
-    // 无分段控件，无需 target
-    _pageLabel = [UILabel new];  // 保留但不入栈
+    [_contentStack addArrangedSubview:_segmentControl];
+    [_segmentControl.heightAnchor constraintEqualToConstant:kRowBase].active = YES;
+    [_segmentControl addTarget:self action:@selector(ykSegChanged:)
+              forControlEvents:UIControlEventValueChanged];
+    _pageLabel = [UILabel new];
     _pageLabel.text = @"设备页 · 本机引擎 65324";
     _pageLabel.font = [UIFont systemFontOfSize:14];
     _pageLabel.textColor = [UIColor secondaryLabelColor];
     _pageLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    // _pageLabel 不入栈（原版无此元素）
+    [_contentStack addArrangedSubview:_pageLabel];
 }
 
 #pragma mark - bottomBar（反编译 bottomBar）
