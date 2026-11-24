@@ -54,7 +54,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
         [self buildScrollAndStack];
         [self buildHeroCard];
         [self buildSegmentControl];
-        [self buildBottomBar];
+        // bottomBar 与 segmentControl 重复
         [self installConstraints];
     }
     return self;
@@ -83,7 +83,7 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 
     [NSLayoutConstraint activateConstraints:@[
         [title.centerXAnchor constraintEqualToAnchor:_headerView.centerXAnchor],
-        [title.bottomAnchor constraintEqualToAnchor:_headerView.bottomAnchor constant:-10.0],
+        [title.centerYAnchor constraintEqualToAnchor:_headerView.centerYAnchor constant:2.0],
         [_moreControl.trailingAnchor constraintEqualToAnchor:_headerView.trailingAnchor constant:-kPad],
         [_moreControl.centerYAnchor constraintEqualToAnchor:title.centerYAnchor],
         [_moreControl.widthAnchor constraintEqualToConstant:kRowBase],
