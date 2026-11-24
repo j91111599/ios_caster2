@@ -83,7 +83,8 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
 
     [NSLayoutConstraint activateConstraints:@[
         [title.centerXAnchor constraintEqualToAnchor:_headerView.centerXAnchor],
-        [title.centerYAnchor constraintEqualToAnchor:_headerView.centerYAnchor constant:2.0],
+        [title.topAnchor constraintEqualToAnchor:_headerView.topAnchor constant:30.0],
+        [title.heightAnchor constraintEqualToConstant:24.0],
         [_moreControl.trailingAnchor constraintEqualToAnchor:_headerView.trailingAnchor constant:-kPad],
         [_moreControl.centerYAnchor constraintEqualToAnchor:title.centerYAnchor],
         [_moreControl.widthAnchor constraintEqualToConstant:kRowBase],
@@ -246,16 +247,15 @@ static UIColor *YkSub(void)       { return [UIColor colorWithWhite:0.60 alpha:1]
     _segmentControl = [[UISegmentedControl alloc] initWithItems:@[@"设备", @"脚本", @"录制"]];
     _segmentControl.selectedSegmentIndex = 0;
     _segmentControl.translatesAutoresizingMaskIntoConstraints = NO;
-    [_contentStack addArrangedSubview:_segmentControl];
-    [_segmentControl.heightAnchor constraintEqualToConstant:kRowBase].active = YES;
-    [_segmentControl addTarget:self action:@selector(ykSegChanged:)
-              forControlEvents:UIControlEventValueChanged];
-    _pageLabel = [UILabel new];
+    // 原版无分段控件（实测 /element/tree），不加入内容栈
+    // 分段控件已按原版移除
+    // 无分段控件，无需 target
+    _pageLabel = [UILabel new];  // 保留但不入栈
     _pageLabel.text = @"设备页 · 本机引擎 65324";
     _pageLabel.font = [UIFont systemFontOfSize:14];
     _pageLabel.textColor = [UIColor secondaryLabelColor];
     _pageLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [_contentStack addArrangedSubview:_pageLabel];
+    // _pageLabel 不入栈（原版无此元素）
 }
 
 #pragma mark - bottomBar（反编译 bottomBar）
