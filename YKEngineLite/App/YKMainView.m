@@ -60,7 +60,7 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
 
     UILabel *title = [self ykLabel:@"远控 Pro" size:20 bold:YES color:[UIColor whiteColor]];
     title.textAlignment = NSTextAlignmentCenter;
-    title.frame = CGRectMake((W-100)/2, 30, 100, 24);
+    title.frame = CGRectMake(0, 30, W, 26);
     [header addSubview:title];
 
     UIButton *home = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -190,7 +190,7 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
     tip2.numberOfLines = 2;
     [c4 addSubview:tip2];
 
-    scroll.contentSize = CGSizeMake(W, 720);
+    scroll.contentSize = CGSizeMake(W, 730);
 
     // ===== 底部导航（原版 y=1198px=599pt，三按钮 w=110 h=60）=====
     UIView *bar = [[UIView alloc] initWithFrame:CGRectMake(0, H-68, W, 68)];
