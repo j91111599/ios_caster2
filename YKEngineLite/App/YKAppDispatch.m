@@ -224,6 +224,30 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
     if ([head isEqualToString:@"debug"]) {
         NSString *verb = seg.count > 1 ? seg[1] : @"ui";
         if ([verb isEqualToString:@"ui"]) return @{ @"value": YkDumpWindow() };
+        if ([verb isEqualToString:@"tab"]) {
+            NSInteger idx = [body[@"i"] integerValue] ?: [query[@"i"] integerValue];
+            __block BOOL ok = NO;
+            void (^blk)(void) = ^{
+                UIWindow *w = nil;
+                for (UIWindow *win in UIApplication.sharedApplication.windows) {
+                    if (win.isKeyWindow) { w = win; break; }
+                }
+                for (UIView *v in w.subviews) {
+                    if ([v respondsToSelector:@selector(ykShowPage:)]) {
+                        [v performSelector:@selector(ykShowPage:) withObject:@(idx)];
+                        ok = YES; break;
+                    }
+                    for (UIView *s2 in v.subviews) {
+                        if ([s2 respondsToSelector:@selector(ykShowPage:)]) {
+                            [s2 performSelector:@selector(ykShowPage:) withObject:@(idx)];
+                            ok = YES; break;
+                        }
+                    }
+                }
+            };
+            if ([NSThread isMainThread]) blk(); else dispatch_sync(dispatch_get_main_queue(), blk);
+            return @{ @"value": @{ @"page": @(idx), @"ok": @(ok) } };
+        }
         return YKErr(@"not_found", verb);
     }
 

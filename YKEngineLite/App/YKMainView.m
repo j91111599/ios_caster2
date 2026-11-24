@@ -19,6 +19,7 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
 - (UIView *)ykCard:(CGRect)r;
 - (UIView *)ykBadge:(CGRect)r symbol:(NSString *)n;
 - (void)ykTab:(UIButton *)sender;
+- (void)ykShowPage:(NSInteger)i;
 @end
 
 @implementation YKMainView {
@@ -333,6 +334,20 @@ static UIColor *YkTint(void)   { return [UIColor colorWithRed:0.13 green:0.59 bl
         b.tintColor = (i == 0) ? YkTint() : YkSub();
         [b addTarget:self action:@selector(ykTab:) forControlEvents:UIControlEventTouchUpInside];
         [_bottomBar addSubview:b];
+    }
+}
+
+- (void)ykShowPage:(NSInteger)i {
+    _devScroll.hidden    = (i != 0);
+    _scriptScroll.hidden = (i != 1);
+    _recordScroll.hidden = (i != 2);
+    NSInteger n = 0;
+    for (UIView *v in _bottomBar.subviews) {
+        if ([v isKindOfClass:[UIButton class]]) {
+            UIButton *b = (UIButton *)v;
+            b.tintColor = (b.tag == i) ? YkTint() : YkSub();
+            n++;
+        }
     }
 }
 
