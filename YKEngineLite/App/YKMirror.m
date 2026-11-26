@@ -8,7 +8,21 @@
 //    MjpegEncoder 0x23d6010 · Sec-WebSocket 0x2571ecc
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <IOSurface/IOSurface.h>
+// IOSurface 头不在公开 SDK 里，手工声明
+typedef struct __IOSurface *IOSurfaceRef;
+typedef uint32_t IOSurfaceLockOptions;
+extern IOSurfaceRef IOSurfaceCreate(CFDictionaryRef properties);
+extern kern_return_t IOSurfaceLock(IOSurfaceRef buffer, IOSurfaceLockOptions options, uint32_t *seed);
+extern kern_return_t IOSurfaceUnlock(IOSurfaceRef buffer, IOSurfaceLockOptions options, uint32_t *seed);
+extern size_t IOSurfaceGetWidth(IOSurfaceRef buffer);
+extern size_t IOSurfaceGetHeight(IOSurfaceRef buffer);
+extern void *IOSurfaceGetBaseAddress(IOSurfaceRef buffer);
+extern size_t IOSurfaceGetBytesPerRow(IOSurfaceRef buffer);
+extern const CFStringRef kIOSurfaceWidth;
+extern const CFStringRef kIOSurfaceHeight;
+extern const CFStringRef kIOSurfaceBytesPerElement;
+extern const CFStringRef kIOSurfacePixelFormat;
+#define kIOSurfaceLockReadOnly 0x00000001
 #import <CoreVideo/CoreVideo.h>
 #import <ImageIO/ImageIO.h>
 #import <dlfcn.h>
