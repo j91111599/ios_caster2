@@ -10,10 +10,9 @@
 #import <UIKit/UIKit.h>
 // IOSurface 头不在公开 SDK 里，手工声明
 typedef struct __IOSurface *IOSurfaceRef;
-typedef uint32_t IOSurfaceLockOptions;
 extern IOSurfaceRef IOSurfaceCreate(CFDictionaryRef properties);
-extern kern_return_t IOSurfaceLock(IOSurfaceRef buffer, IOSurfaceLockOptions options, uint32_t *seed);
-extern kern_return_t IOSurfaceUnlock(IOSurfaceRef buffer, IOSurfaceLockOptions options, uint32_t *seed);
+extern kern_return_t IOSurfaceLock(IOSurfaceRef buffer, uint32_t options, uint32_t *seed);
+extern kern_return_t IOSurfaceUnlock(IOSurfaceRef buffer, uint32_t options, uint32_t *seed);
 extern size_t IOSurfaceGetWidth(IOSurfaceRef buffer);
 extern size_t IOSurfaceGetHeight(IOSurfaceRef buffer);
 extern void *IOSurfaceGetBaseAddress(IOSurfaceRef buffer);
@@ -36,7 +35,7 @@ typedef struct _CARenderServer *CARenderServerRef;
 
 static int gMirrorPort = 65330;
 static int gMirrorFps  = 20;
-static int gMirrorQuality = 0.6;
+static double gMirrorQuality = 0.6;
 static NSMutableArray *gWSFds = nil;
 static NSThread *gMirrorThread = nil;
 static volatile BOOL gMirrorRunning = NO;
