@@ -98,6 +98,10 @@ static NSString *YkUUID40(void) {
 // ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
 static NSMutableDictionary *gImages = nil;
 extern NSDictionary *YkMatchTemplate(UIImage *scene, UIImage *tpl, double threshold);
+extern NSDictionary *YkMirrorStart(NSInteger port, NSInteger fps, double quality);
+extern NSDictionary *YkMirrorStop(void);
+extern NSDictionary *YkMirrorStatus(void);
+extern NSDictionary *YkMirrorGrabFrame(double quality);
 extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
 extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d, NSInteger steps);
@@ -243,6 +247,20 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             if ([NSThread isMainThread]) blk(); else dispatch_sync(dispatch_get_main_queue(), blk);
             return @{ @"value": @{ @"page": @(idx), @"ok": @(ok) } };
         }
+        return YKErr(@"not_found", verb);
+    }
+
+
+    // ---- mirror（CARenderServer + MJPEG + WebSocket）----
+    if ([head isEqualToString:@"mirror"]) {
+        NSString *verb = seg.count > 1 ? seg[1] : @"status";
+        if ([verb isEqualToString:@"start"])
+            return YkMirrorStart([body[@"port"] integerValue],
+                                 [body[@"fps"] integerValue],
+                                 [body[@"quality"] doubleValue]);
+        if ([verb isEqualToString:@"stop"])   return YkMirrorStop();
+        if ([verb isEqualToString:@"status"]) return YkMirrorStatus();
+        if ([verb isEqualToString:@"grab"])   return YkMirrorGrabFrame([body[@"quality"] doubleValue]);
         return YKErr(@"not_found", verb);
     }
 
