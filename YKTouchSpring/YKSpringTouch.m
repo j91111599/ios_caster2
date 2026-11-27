@@ -56,15 +56,33 @@ static uint64_t YkNow(void) {
 }
 
 // phase: 1=down 2=up 3=move
+// 正确签名（14 参数，公开）：
+//   IOHIDEventCreateDigitizerFingerEvent(alloc, time, index, identity,
+//        eventMask, buttonMask, x, y, z, tipPressure, twist,
+//        range, touch, options)
 static void YkFinger(int phase, double x, double y, int finger, double pressure) {
-    typedef IOHIDEventRef (*FingerFn)(CFAllocatorRef, IOHIDEventRef, double, double,
-                                      uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                                      double, double, double, double, uint32_t);
+    typedef IOHIDEventRef (*FingerFn)(CFAllocatorRef, uint64_t, uint32_t, uint32_t,
+                                      uint32_t, uint32_t, double, double, double,
+                                      double, double, int, int, uint32_t);
     FingerFn fn = (FingerFn)YkSym("IOHIDEventCreateDigitizerFingerEvent");
     if (!fn) return;
-    IOHIDEventRef ev = fn(kCFAllocatorDefault, NULL, YkNow(), x, y,
-                          1, 1, (uint32_t)phase, (uint32_t)finger,
-                          pressure, 1.0, 0.0, 0.0, 0);
+
+    uint32_t mask = 3;                       // Range | Touch
+    int touch = (phase == 2) ? 0 : 1;        // up 时 touch=0
+    double press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
+
+    IOHIDEventRef ev = fn(kCFAllocatorDefault,
+                          YkNow(),          // uint64_t AbsoluteTime
+                          (uint32_t)finger, // index
+                          (uint32_t)finger, // identity
+                          mask,             // eventMask
+                          0,                // buttonMask
+                          x, y, 0.0,        // x y z
+                          press,            // tipPressure
+                          0.0,              // twist
+                          1,                // range
+                          touch,            // touch
+                          0);               // options
     if (ev) { YkDispatch(ev); CFRelease(ev); }
 }
 
@@ -109,16 +127,18 @@ static NSData *HandleLine(NSString *line) {
     NSDictionary *resp = nil;
 
     if ([action isEqualToString:@"tap"]) {
-        /* HID disabled */ (void)x; (void)y;
+        DoTap(x, y);
         resp = @{ @"ok": @YES, @"action": action, @"x": @(x), @"y": @(y) };
     } else if ([action isEqualToString:@"longPress"]) {
-        /* HID disabled */ (void)x; (void)y;
+        DoLongPress(x, y, [req[@"duration"] doubleValue] ?: 1.0);
         resp = @{ @"ok": @YES, @"action": action };
     } else if ([action isEqualToString:@"swipe"]) {
-        /* HID disabled */
+        DoSwipe(x, y, [req[@"toX"] doubleValue], [req[@"toY"] doubleValue],
+                [req[@"duration"] doubleValue] ?: 0.3, (int)([req[@"steps"] integerValue] ?: 12));
         resp = @{ @"ok": @YES, @"action": action };
     } else if ([action isEqualToString:@"multi"]) {
-        /* HID disabled */
+        DoMulti(x, y, [req[@"x2"] doubleValue], [req[@"y2"] doubleValue],
+                [req[@"duration"] doubleValue] ?: 0.3);
         resp = @{ @"ok": @YES, @"action": action };
     } else if ([action isEqualToString:@"ping"]) {
         resp = @{ @"ok": @YES, @"client": @(YkClient() != NULL), @"pid": @(getpid()) };
