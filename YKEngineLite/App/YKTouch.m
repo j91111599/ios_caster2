@@ -75,17 +75,18 @@ static IOHIDEventSystemClientRef YkHIDClient(void) {
     return client;
 }
 
-// 枚举 HID 服务，拿到触摸屏的 registry ID（= senderID 候选）
+// 枚举 HID 服务，按 usage 找出触摸屏，返回其 registry ID（= senderID）
 static uint64_t YkFindTouchSenderID(void) {
     void *fc = YkSym("IOHIDEventSystemClientCopyServices");
     void *fr = YkSym("IOHIDServiceClientGetRegistryID");
-    if (!fc || !fr) { fprintf(stderr, "[touch] no CopyServices sym\n"); return 0; }
+    void *fp = YkSym("IOHIDServiceClientCopyProperty");
+    if (!fc || !fr || !fp) { fprintf(stderr, "[touch] missing sym\n"); return 0; }
 
     IOHIDEventSystemClientRef cl = YkHIDClient();
     if (!cl) return 0;
 
     CFArrayRef svcs = ((CFArrayRef (*)(IOHIDEventSystemClientRef))fc)(cl);
-    if (!svcs) { fprintf(stderr, "[touch] CopyServices=NULL\n"); fflush(stderr); return 0; }
+    if (!svcs) { fprintf(stderr, "[touch] CopyServices NULL\n"); return 0; }
 
     CFIndex n = CFArrayGetCount(svcs);
     fprintf(stderr, "[touch] services=%ld\n", (long)n); fflush(stderr);
@@ -94,12 +95,24 @@ static uint64_t YkFindTouchSenderID(void) {
     for (CFIndex i = 0; i < n; i++) {
         void *svc = (void *)CFArrayGetValueAtIndex(svcs, i);
         if (!svc) continue;
-        uint64_t rid = ((uint64_t (*)(void *))fr)(svc);
-        fprintf(stderr, "[touch]   svc[%ld] rid=%llu\n", (long)i, (unsigned long long)rid);
-        if (!found && rid) found = rid;
+
+        int page = -1, usage = -1;
+        CFTypeRef up = ((CFTypeRef (*)(void *, CFStringRef))fp)(svc, CFSTR("PrimaryUsagePage"));
+        CFTypeRef us = ((CFTypeRef (*)(void *, CFStringRef))fp)(svc, CFSTR("PrimaryUsage"));
+        if (up) { CFNumberGetValue(up, kCFNumberIntType, &page);  CFRelease(up); }
+        if (us) { CFNumberGetValue(us, kCFNumberIntType, &usage); CFRelease(us); }
+
+        // 只看 digitizer 类
+        if (page == 0x0D) {
+            uint64_t rid = ((uint64_t (*)(void *))fr)(svc);
+            fprintf(stderr, "[touch] DIGITIZER svc[%ld] page=%d usage=%d rid=%llu\n",
+                    (long)i, page, usage, (unsigned long long)rid);
+            fflush(stderr);
+            if (!found) found = rid;
+        }
     }
-    fflush(stderr);
     CFRelease(svcs);
+    fprintf(stderr, "[touch] picked sender=%llu\n", (unsigned long long)found); fflush(stderr);
     return found;
 }
 
