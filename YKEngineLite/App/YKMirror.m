@@ -188,9 +188,19 @@ static void YkMirrorLoop(void) {
         // 按 fps 推帧
         NSTimeInterval dt = -[lastFrame timeIntervalSinceNow];
         if (dt >= interval && gWSFds.count > 0) {
-            IOSurfaceRef s = YkRenderDisplay();
-            NSData *jpeg = YkEncodeJPEG(s, gMirrorQuality);
-            if (s) CFRelease(s);
+            NSData *jpeg = nil;
+            @autoreleasepool {
+                IOSurfaceRef s = YkRenderDisplay();
+                jpeg = YkEncodeJPEG(s, gMirrorQuality);
+                if (s) CFRelease(s);
+                if (!jpeg) {
+                    __block NSData *fb = nil;
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        fb = YkGrabJPEGFallback(gMirrorQuality);
+                    });
+                    jpeg = fb;
+                }
+            }
             if (jpeg) {
                 NSMutableArray *dead = [NSMutableArray array];
                 for (NSNumber *n in [gWSFds copy]) {
@@ -238,13 +248,44 @@ NSDictionary *YkMirrorStatus(void) {
                            @"capture": @"CARenderServer" } };
 }
 
+// 回退取帧：UIGraphics 渲染主窗口（不依赖私有 API）
+static NSData *YkGrabJPEGFallback(double quality) {
+    UIWindow *win = nil;
+    for (UIWindow *w in UIApplication.sharedApplication.windows)
+        if (w.isKeyWindow) { win = w; break; }
+    if (!win) win = UIApplication.sharedApplication.windows.firstObject;
+    if (!win) return nil;
+
+    UIGraphicsBeginImageContextWithOptions(win.bounds.size, NO, 0);
+    CGContextRef ctx = UIGraphicsGetCurrentContext();
+    // 用 renderInContext（drawViewHierarchy 在后台会返回空白）
+    [win.layer renderInContext:ctx];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if (!img) return nil;
+
+    NSMutableData *md = [NSMutableData data];
+    CGImageDestinationRef dst = CGImageDestinationCreateWithData(
+        (__bridge CFMutableDataRef)md, CFSTR("public.jpeg"), 1, NULL);
+    if (!dst) return nil;
+    NSDictionary *opts = @{ (id)kCGImageDestinationLossyCompressionQuality: @(quality) };
+    CGImageDestinationAddImage(dst, img.CGImage, (__bridge CFDictionaryRef)opts);
+    BOOL ok = CGImageDestinationFinalize(dst);
+    CFRelease(dst);
+    return ok ? md : nil;
+}
+
 // 单帧抓取（调试用）
 NSDictionary *YkMirrorGrabFrame(double quality) {
+    double q = quality > 0 ? quality : 0.8;
     IOSurfaceRef s = YkRenderDisplay();
-    NSData *jpeg = YkEncodeJPEG(s, quality > 0 ? quality : 0.8);
+    NSData *jpeg = YkEncodeJPEG(s, q);
+    BOOL viaSurface = (jpeg != nil);
     if (s) CFRelease(s);
-    if (!jpeg) return @{ @"value": @{ @"error": @"capture_failed", @"surface": @(s != NULL) } };
+    if (!jpeg) jpeg = YkGrabJPEGFallback(q);
+    if (!jpeg) return @{ @"value": @{ @"error": @"capture_failed" } };
     return @{ @"value": @{ @"base64": [jpeg base64EncodedStringWithOptions:0],
                            @"bytes": @(jpeg.length),
-                           @"codec": @"jpeg" } };
+                           @"codec": @"jpeg",
+                           @"source": viaSurface ? @"CARenderServer" : @"UIGraphics" } };
 }
