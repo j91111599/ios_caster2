@@ -46,33 +46,37 @@ static void *YkSym(const char *name) {
     return p;
 }
 
-static IOHIDEventSystemClientRef YkHIDClient(void) {
+static IOHIDEventSystemClientRef YkHIDClientMain(void) {
+    // 必须只在主线程调用：client 要绑到主 runloop，否则 Dispatch 会被静默丢弃
     static IOHIDEventSystemClientRef client = NULL;
-    static BOOL tried = NO;
-    if (tried) return client;
-    tried = YES;
+    if (client) return client;
 
-    void *h = YkSym("IOHIDEventSystemClientCreateWithType");
-    if (h) {
-        // (CFAllocatorRef, IOHIDEventSystemClientType, CFDictionaryRef)
-        typedef IOHIDEventSystemClientRef (*T3)(CFAllocatorRef, int, CFDictionaryRef);
-        client = ((T3)h)(kCFAllocatorDefault, 2 /*Inject*/, NULL); if (!client) { }
-    }
+    void *hc = YkSym("IOHIDEventSystemClientCreate");
+    if (hc) client = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef))hc)(kCFAllocatorDefault);
     if (!client) {
-        void *h2 = YkSym("IOHIDEventSystemClientCreate");
-        if (h2) client = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef))h2)(kCFAllocatorDefault);
+        void *h = YkSym("IOHIDEventSystemClientCreateWithType");
+        if (h) {
+            typedef IOHIDEventSystemClientRef (*T3)(CFAllocatorRef, int, CFDictionaryRef);
+            client = ((T3)h)(kCFAllocatorDefault, 2, NULL);
+        }
     }
     if (client) {
         void *hs = YkSym("IOHIDEventSystemClientScheduleWithRunLoop");
-        if (hs) {
-            typedef void (*SchedFn)(IOHIDEventSystemClientRef, CFRunLoopRef, CFStringRef);
-            ((SchedFn)hs)(client, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-        }
-        fprintf(stderr, "[touch] client=%p\n", (void *)client); fflush(stderr);
+        if (hs) ((void (*)(IOHIDEventSystemClientRef, CFRunLoopRef, CFStringRef))hs)(
+                    client, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+        fprintf(stderr, "[touch] client(main)=%p\n", (void *)client); fflush(stderr);
     } else {
         fprintf(stderr, "[touch] client=NULL\n"); fflush(stderr);
     }
     return client;
+}
+
+static IOHIDEventSystemClientRef YkHIDClient(void) {
+    // 任意线程调用都安全：切到主线程取 client
+    if ([NSThread isMainThread]) return YkHIDClientMain();
+    __block IOHIDEventSystemClientRef c = NULL;
+    dispatch_sync(dispatch_get_main_queue(), ^{ c = YkHIDClientMain(); });
+    return c;
 }
 
 // 枚举 HID 服务，按 usage 找出触摸屏，返回其 registry ID（= senderID）
@@ -186,7 +190,16 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
 
     fprintf(stderr, "[touch] step5b dispatch client=%p sender=%llu\n",
             (void *)YkHIDClient(), (unsigned long long)gYkSenderID); fflush(stderr);
-    YkSendEvent(hand);
+    if ([NSThread isMainThread]) {
+        YkSendEvent(hand);
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            YkSendEvent(hand);
+            CFRelease(hand);
+        });
+        fprintf(stderr, "[touch] step6 dispatched(main async)\n"); fflush(stderr);
+        return;
+    }
     fprintf(stderr, "[touch] step6 dispatched\n"); fflush(stderr);
     CFRelease(hand);
 }
