@@ -106,7 +106,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     // 父事件：transducerType = 3 (Hand)
     fprintf(stderr, "[touch] step1 before DigitizerEvent\n"); fflush(stderr);
     IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
-                                             3, 0, 0, mask, 0,
+                                             1, 0, 0, mask, 0,
                                              x, y, 0.0, press, 0.0, 1, touch, 0);
     fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
@@ -123,6 +123,10 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     }
 
     fprintf(stderr, "[touch] step5b before dispatch client=%p\n", (void *)YkHIDClient()); fflush(stderr);
+    // 标记为显示集成设备（坐标才映射到屏幕）
+    void *fsv = YkSym("IOHIDEventSetIntegerValue");
+    if (fsv) ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsv)(hand, 0x000B0005, 1);
+
     YkSendEvent(hand);
     fprintf(stderr, "[touch] step6 dispatched\n"); fflush(stderr);
     CFRelease(hand);
