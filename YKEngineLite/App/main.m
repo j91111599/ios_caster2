@@ -780,24 +780,41 @@ int main(int argc, char *argv[]) {
 
 
 // 保证引擎一定启动：进程起来 1.5 秒后从窗口树找到根 VC 调用 startEngineIfNeeded
+static void YKBootTick(int attempt) {
+    NSArray *wins = UIApplication.sharedApplication.windows;
+    YkBootLog(@"boot tick %d windows=%lu", attempt, (unsigned long)wins.count);
+    if (wins.count == 0) {
+        if (attempt < 40) {   // 最多重试 40 次（20 秒）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ YKBootTick(attempt + 1); });
+        }
+        return;
+    }
+    for (UIWindow *w in wins) {
+        UIViewController *r = w.rootViewController;
+        if (!r) continue;
+        if ([r isKindOfClass:[UINavigationController class]])
+            r = ((UINavigationController *)r).viewControllers.firstObject;
+        if ([r respondsToSelector:NSSelectorFromString(@"startEngineIfNeeded")]) {
+            YkBootLog(@"boot: calling startEngineIfNeeded on %@", NSStringFromClass([r class]));
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            [r performSelector:NSSelectorFromString(@"startEngineIfNeeded")];
+#pragma clang diagnostic pop
+            return;
+        }
+    }
+    if (attempt < 40) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ YKBootTick(attempt + 1); });
+    }
+}
+
 __attribute__((constructor))
 static void YKAutostartEngine(void) {
     YkBootLog(@"constructor fired");
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        YkBootLog(@"autostart timer fired, windows=%lu", (unsigned long)UIApplication.sharedApplication.windows.count);
-        for (UIWindow *w in UIApplication.sharedApplication.windows) {
-            UIViewController *r = w.rootViewController;
-            if ([r isKindOfClass:[UINavigationController class]])
-                r = ((UINavigationController *)r).viewControllers.firstObject;
-            YkBootLog(@"rootVC=%@ responds=%d", NSStringFromClass([r class]),
-                      [r respondsToSelector:NSSelectorFromString(@"startEngineIfNeeded")]);
-            if ([r respondsToSelector:NSSelectorFromString(@"startEngineIfNeeded")]) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                [r performSelector:NSSelectorFromString(@"startEngineIfNeeded")];
-#pragma clang diagnostic pop
-            }
-        }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ YKBootTick(0); });
+}
     });
 }
