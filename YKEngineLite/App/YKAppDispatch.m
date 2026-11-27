@@ -98,7 +98,7 @@ static NSString *YkUUID40(void) {
 // ===== image 族（CoreGraphics 实现，无需 OpenCV）=====
 static NSMutableDictionary *gImages = nil;
 extern NSDictionary *YkMatchTemplate(UIImage *scene, UIImage *tpl, double threshold);
-extern NSDictionary *YkMirrorStart(NSInteger port, NSInteger fps, double quality);
+extern NSDictionary *YkMirrorStart(NSInteger port, NSInteger fps, double quality, double scale);
 extern NSDictionary *YkMirrorStop(void);
 extern NSDictionary *YkMirrorStatus(void);
 extern NSDictionary *YkMirrorGrabFrame(double quality);
