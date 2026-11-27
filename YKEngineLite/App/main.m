@@ -1,6 +1,4 @@
-//  YKViewYyyy — 按反编译数值重建的首页（约束版）
 //
-//  数值来源：dump/project_rn/YKApp/YKViewYyyy.m（Ghidra 伪代码）
 //    · 301 条 NSLayoutConstraint / 18 组 activateConstraints
 //    · 72 个视图 setTranslatesAutoresizingMaskIntoConstraints:NO
 //    · 间距（IEEE754 还原）：12 / 16 / 20 / 24 / 40 / 44 / 52，全部 4pt 栅格
@@ -183,6 +181,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UIView *_stack;
     HTTPServer *_srv;
     NSTimer *_poller;
+    NSTimer *_engineRetry;
+    NSUInteger _engineAttempts;
     UILabel *_connValue;
     UISwitch *_serviceSwitch;
     UILabel *_connTitle;
@@ -516,6 +516,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                   name:UIApplicationDidBecomeActiveNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(onBecomeActive)
                                                  name:UIApplicationDidBecomeActiveNotification
@@ -523,20 +525,40 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     [self startEngineIfNeeded];
 }
 
-- (void)onBecomeActive { [self startEngineIfNeeded]; }
+- (void)onBecomeActive {
+    _engineAttempts = 0;
+    if ([_srv.interface isEqualToString:@"loopback"]) {
+        [_srv stop];
+        _srv = nil;
+    }
+    [self startEngineIfNeeded];
+}
 
 - (void)dealloc {
+    [_engineRetry invalidate];
+    [_srv stop];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)startEngineIfNeeded {
-    if (_srv) return;
+    if (_srv.isRunning) return;
+    [_engineRetry invalidate];
+    _engineRetry = nil;
+    _engineAttempts++;
+    [_srv stop];
+    gBindErr = nil;
     _srv = [HTTPServer new];
     _srv.port = 65324;
     _srv.interface = @"any";   // 监听所有网卡，PC 可直连
     __weak typeof(self) weakSelf = self;
+    __weak HTTPServer *weakServer = _srv;
     [_srv get:@"/health" withBlock:^(RouteRequest *req, RouteResponse *res) {
+        HTTPServer *server = weakServer;
+        BOOL lan = server.isRunning && ![server.interface isEqualToString:@"loopback"];
         [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
+                                             @"version": @"9.0.6",
+                                             @"listenAddress": lan ? @"0.0.0.0" : @"127.0.0.1",
+                                             @"lanListening": @(lan),
                                              @"engine": @"reconstructed-inapp",
                                              @"port": @65324,
                                              @"sessionCount": @(gSessions.count),
@@ -579,6 +601,15 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         gBindErr = [NSString stringWithFormat:@"any=%@ loopback=%@", err.localizedDescription ?: @"?", e2.localizedDescription ?: @"?"];
     }
     NSLog(@"[YKEngineLite] in-app engine start=%d err=%@", ok, gBindErr ?: (err.localizedDescription ?: @"nil"));
+    if (!ok) {
+        [_srv stop];
+        _srv = nil;
+        if (_engineAttempts < 3) {
+            _engineRetry = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:NO block:^(NSTimer *timer) {
+                [weakSelf startEngineIfNeeded];
+            }];
+        }
+    }
     (void)weakSelf;
 }
 

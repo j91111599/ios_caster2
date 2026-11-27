@@ -13,6 +13,16 @@
 #import <arpa/inet.h>
 #import <unistd.h>
 #import <errno.h>
+#import <fcntl.h>
+#import <string.h>
+
+static NSError *YKSocketError(NSString *operation, int code, NSString *interface, uint16_t port) {
+    NSString *message = [NSString stringWithFormat:@"%@ %@:%u errno=%d (%s)",
+                         operation, interface, port, code, strerror(code)];
+    NSLog(@"[YKEngineLite] %@", message);
+    return [NSError errorWithDomain:NSPOSIXErrorDomain code:code
+                          userInfo:@{NSLocalizedDescriptionKey: message}];
+}
 
 #pragma mark - RouteRequest
 
@@ -76,6 +86,7 @@
 @implementation HTTPServer {
     int  _listenFD;
     BOOL _running;
+    dispatch_source_t _acceptSource;
 }
 
 - (instancetype)init {
@@ -102,16 +113,20 @@
 - (void)setDefaultHandler:(YKRouteHandler)handler               { _defaultHandler = [handler copy]; }
 
 - (BOOL)start:(NSError **)error {
+    @synchronized (self) {
+    if (error) *error = nil;
+    if (_running) return YES;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
-        if (error) *error = [NSError errorWithDomain:@"HTTPServer" code:1
-                                            userInfo:@{NSLocalizedDescriptionKey: @"socket() 失败"}];
+        int e = errno;
+        if (error) *error = YKSocketError(@"socket", e, self.interface, self.port);
         return NO;
     }
     int one = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
 
     struct sockaddr_in addr = {0};
+    addr.sin_len = sizeof(addr);
     addr.sin_family = AF_INET;
     addr.sin_port = htons(self.port);
     addr.sin_addr.s_addr = [self.interface isEqualToString:@"loopback"]
@@ -120,33 +135,47 @@
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         int e = errno;
         close(fd);
-        if (error) *error = [NSError errorWithDomain:@"HTTPServer" code:e
-                                            userInfo:@{NSLocalizedDescriptionKey:
-                                                [NSString stringWithFormat:@"bind 失败 errno=%d", e]}];
+        if (error) *error = YKSocketError(@"bind", e, self.interface, self.port);
         return NO;
     }
     if (listen(fd, 16) != 0) {
         int e = errno;
         close(fd);
-        if (error) *error = [NSError errorWithDomain:@"HTTPServer" code:e
-                                            userInfo:@{NSLocalizedDescriptionKey:
-                                                [NSString stringWithFormat:@"listen 失败 errno=%d", e]}];
+        if (error) *error = YKSocketError(@"listen", e, self.interface, self.port);
+        return NO;
+    }
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        int e = errno;
+        close(fd);
+        if (error) *error = YKSocketError(@"fcntl", e, self.interface, self.port);
         return NO;
     }
     _listenFD = fd;
     _running = YES;
 
     __weak typeof(self) weakSelf = self;
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, fd, 0,
+        dispatch_queue_create("com.yk.http.accept", DISPATCH_QUEUE_SERIAL));
+    _acceptSource = source;
+    dispatch_source_set_event_handler(source, ^{
+        HTTPServer *strong = weakSelf;
+        if (!strong) return;
+        @synchronized (strong) {
+        if (!strong->_running || strong->_listenFD != fd) return;
         while (YES) {
-            HTTPServer *strong = weakSelf;
-            if (!strong || !strong->_running) break;
             struct sockaddr_in cli = {0};
             socklen_t len = sizeof(cli);
-            int cfd = accept(strong->_listenFD, (struct sockaddr *)&cli, &len);
+            int cfd = accept(fd, (struct sockaddr *)&cli, &len);
             if (cfd < 0) {
-                if (!strong->_running) break;
-                usleep(50000);
+                if (errno == EINTR) continue;
+                if (errno != EAGAIN && errno != EWOULDBLOCK)
+                    YKSocketError(@"accept", errno, strong.interface, strong.port);
+                break;
+            }
+            int clientFlags = fcntl(cfd, F_GETFL, 0);
+            if (clientFlags < 0 || fcntl(cfd, F_SETFL, clientFlags & ~O_NONBLOCK) < 0) {
+                close(cfd);
                 continue;
             }
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -154,20 +183,39 @@
                 if (s2) [s2 serveClient:cfd]; else close(cfd);
             });
         }
+        }
     });
+    // The cancel handler owns this descriptor, even across stop/start cycles.
+    dispatch_source_set_cancel_handler(source, ^{ close(fd); });
+    dispatch_resume(source);
 
     NSLog(@"[YKEngineLite] listening on %@:%u (fd=%d)", self.interface, self.port, fd);
     return YES;
+    }
+}
+
+- (BOOL)isRunning {
+    @synchronized (self) { return _running; }
 }
 
 - (void)stop {
+    @synchronized (self) {
     _running = NO;
-    if (_listenFD >= 0) { close(_listenFD); _listenFD = -1; }
+    if (_listenFD >= 0) shutdown(_listenFD, SHUT_RDWR);
+    if (_acceptSource) dispatch_source_cancel(_acceptSource);
+    _acceptSource = nil;
+    _listenFD = -1;
+    }
 }
+
+- (void)dealloc { [self stop]; }
 
 - (void)serveClient:(int)cfd {
     struct timeval tv = { 10, 0 };
     setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(cfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    int one = 1;
+    setsockopt(cfd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
 
     NSMutableData *buf = [NSMutableData data];
     char chunk[8192];
@@ -202,8 +250,13 @@
     NSMutableData *out = [NSMutableData data];
     if (buf.length) [self processRaw:buf into:out];
 
-    ssize_t ignored = write(cfd, out.bytes, out.length);
-    (void)ignored;
+    NSUInteger sent = 0;
+    while (sent < out.length) {
+        ssize_t n = write(cfd, (const char *)out.bytes + sent, out.length - sent);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) break;
+        sent += (NSUInteger)n;
+    }
     close(cfd);
 }
 

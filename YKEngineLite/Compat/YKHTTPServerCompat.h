@@ -1,9 +1,7 @@
 //
 //  YKHTTPServerCompat.h — 最小可用 HTTP 服务器 + Route 抽象（替代 RoutingHTTPServer）
 //
-//  为什么需要：重建出来的 YKHTTPRouter.m 依赖 RoutingHTTPServer 的
 //  HTTPServer / RouteRequest / RouteResponse 三个类。本文件给出等价实现，
-//  使重建代码无需改动即可编译；行为对齐设备实测（见 PROTOCOL_FINAL.md）：
 //    · 成功包封 {"value": …}   失败 {"value.error","value.message"}
 //    · 受保护路由需 X-YK-Session-Id
 //    · OPTIONS /* 统一 CORS
@@ -39,6 +37,7 @@
 typedef void (^YKRouteHandler)(RouteRequest *req, RouteResponse *res);
 
 @interface HTTPServer : NSObject
+@property (atomic, readonly, getter=isRunning) BOOL running;
 @property (nonatomic, assign) uint16_t port;
 @property (nonatomic, copy)   NSString *type;        // 兼容字段（不使用 Bonjour）
 @property (nonatomic, copy)   NSString *interface;   // "loopback" / "all"
