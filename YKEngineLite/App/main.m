@@ -539,14 +539,27 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     YkBootLog(@"viewDidAppear");
+    [self ykRebuildEngine];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(onBecomeActive)
                                                  name:UIApplicationDidBecomeActiveNotification
                                                object:nil];
-    [self startEngineIfNeeded];
+    [self ykRebuildEngine];
 }
 
-- (void)onBecomeActive { [self startEngineIfNeeded]; }
+- (void)onBecomeActive {
+    // App 从后台恢复时，旧的监听 socket 可能已被系统作废，重建
+    YkBootLog(@"onBecomeActive -> rebuild engine");
+    [self ykRebuildEngine];
+}
+
+- (void)ykRebuildEngine {
+    if (_srv) {
+        @try { [_srv stop]; } @catch (__unused NSException *e) { }
+        _srv = nil;
+    }
+    [self startEngineIfNeeded];
+}
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
