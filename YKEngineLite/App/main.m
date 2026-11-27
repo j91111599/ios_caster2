@@ -17,7 +17,14 @@ static void YkBootLog(NSString *fmt, ...) {
     va_end(ap);
     NSString *line = [NSString stringWithFormat:@"[%.3f] %@\n",
                       [[NSDate date] timeIntervalSince1970], msg];
-    NSString *path = @"/tmp/yk_boot.log";
+    for (NSString *p2 in @[@"/var/mobile/Media/yk_boot.log", @"/tmp/yk_boot.log"]) {
+        NSFileHandle *f2 = [NSFileHandle fileHandleForWritingAtPath:p2];
+        if (!f2) { [line writeToFile:p2 atomically:YES encoding:NSUTF8StringEncoding error:NULL]; continue; }
+        [f2 seekToEndOfFile];
+        [f2 writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+        [f2 closeFile];
+    }
+    NSString *path = @"/var/mobile/Media/yk_boot.log";
     NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
     if (!fh) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL]; return; }
     [fh seekToEndOfFile];
@@ -751,6 +758,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 @end
 
 int main(int argc, char *argv[]) {
+    YkBootLog(@"=== main() entered ===");
     @autoreleasepool {
         signal(SIGPIPE, SIG_IGN);
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([YKAppDelegate class]));
