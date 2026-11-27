@@ -19,6 +19,7 @@ ykenginelite_FILES = \
 ykenginelite_FRAMEWORKS = Foundation UIKit Network Security NetworkExtension
 ykenginelite_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness -IYKEngineLite/Compat -IYKEngineLite/Recovered
 ykenginelite_LDFLAGS = -fuse-ld=lld
+ykenginelite_CODESIGN_FLAGS = -SYKEngineLite/App/daemon.entitlements.plist
 include $(THEOS_MAKE_PATH)/tool.mk
 
 # ---------- App（SpringBoard 图标 + 界面 + 进程内引擎）----------
