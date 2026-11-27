@@ -65,6 +65,7 @@ static NSString *YkJBType(void) {
 
 static NSMutableArray *gScripts = nil;
 static NSMutableArray *gRecords = nil;
+static NSString *gBindErr = nil;
 static NSMutableArray *gSessions = nil;
 
 static UILabel *YkLabel(NSString *t, CGFloat size, UIFontWeight w, UIColor *c) {
@@ -538,7 +539,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
                                              @"engine": @"reconstructed-inapp",
                                              @"port": @65324,
-                                             @"sessionCount": @(gSessions.count) } }];
+                                             @"sessionCount": @(gSessions.count),
+                                             @"bindErr": gBindErr ?: @"" } }];
     }];
     [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
         NSString *sid = [NSString stringWithFormat:@"sess_%.0f_%@",
@@ -569,7 +571,14 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     }];
     NSError *err = nil;
     BOOL ok = [_srv start:&err];
-    NSLog(@"[YKEngineLite] in-app engine start=%d err=%@", ok, err);
+    if (!ok) {
+        // 全网卡失败则回退 loopback（至少保留设备内可用）
+        _srv.interface = @"loopback";
+        NSError *e2 = nil;
+        ok = [_srv start:&e2];
+        gBindErr = [NSString stringWithFormat:@"any=%@ loopback=%@", err.localizedDescription ?: @"?", e2.localizedDescription ?: @"?"];
+    }
+    NSLog(@"[YKEngineLite] in-app engine start=%d err=%@", ok, gBindErr ?: (err.localizedDescription ?: @"nil"));
     (void)weakSelf;
 }
 
@@ -585,7 +594,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
                 [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
                                                      @"engine": @"reconstructed-inapp",
                                                      @"port": @65324,
-                                                     @"sessionCount": @(gSessions.count) } }];
+                                                     @"sessionCount": @(gSessions.count),
+                                             @"bindErr": gBindErr ?: @"" } }];
             }];
             // 会话生命周期（对齐原版 /session/create|list|delete）
             [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
