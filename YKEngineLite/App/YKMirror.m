@@ -33,6 +33,8 @@ extern const CFStringRef kIOSurfacePixelFormat;
 
 typedef struct _CARenderServer *CARenderServerRef;
 
+static NSData *YkGrabJPEGFallback(double quality);
+
 static int gMirrorPort = 65330;
 static int gMirrorFps  = 20;
 static double gMirrorQuality = 0.6;
