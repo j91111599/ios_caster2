@@ -9,6 +9,21 @@
 //
 //  元素清单：7 图标 · 18 文本 · 8 圆角 · 5 显隐
 #import <UIKit/UIKit.h>
+
+// 启动日志（写到 /tmp，可用 65322 的 /file/read 读取）
+static void YkBootLog(NSString *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    NSString *line = [NSString stringWithFormat:@"[%.3f] %@\n",
+                      [[NSDate date] timeIntervalSince1970], msg];
+    NSString *path = @"/tmp/yk_boot.log";
+    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!fh) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL]; return; }
+    [fh seekToEndOfFile];
+    [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+    [fh closeFile];
+}
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
 NSDictionary *YKAppDispatchPath(NSString *method, NSString *path, NSDictionary *body, NSDictionary *query);
@@ -516,6 +531,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    YkBootLog(@"viewDidAppear");
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(onBecomeActive)
                                                  name:UIApplicationDidBecomeActiveNotification
@@ -530,6 +546,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
 }
 
 - (void)startEngineIfNeeded {
+    YkBootLog(@"startEngineIfNeeded enter, _srv=%@", _srv ? @"exists" : @"nil");
     if (_srv) return;
     _srv = [HTTPServer new];
     _srv.port = 65324;
@@ -571,11 +588,13 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     }];
     NSError *err = nil;
     BOOL ok = [_srv start:&err];
+    YkBootLog(@"srv start#1 ok=%d err=%@ iface=%@ port=%d", ok, err.localizedDescription, _srv.interface, _srv.port);
     if (!ok) {
         // 全网卡失败则回退 loopback（至少保留设备内可用）
         _srv.interface = @"loopback";
         NSError *e2 = nil;
         ok = [_srv start:&e2];
+        YkBootLog(@"srv start#2 ok=%d err=%@ iface=%@", ok, e2.localizedDescription, _srv.interface);
         gBindErr = [NSString stringWithFormat:@"any=%@ loopback=%@", err.localizedDescription ?: @"?", e2.localizedDescription ?: @"?"];
     }
     NSLog(@"[YKEngineLite] in-app engine start=%d err=%@", ok, gBindErr ?: (err.localizedDescription ?: @"nil"));
@@ -742,12 +761,16 @@ int main(int argc, char *argv[]) {
 // 保证引擎一定启动：进程起来 1.5 秒后从窗口树找到根 VC 调用 startEngineIfNeeded
 __attribute__((constructor))
 static void YKAutostartEngine(void) {
+    YkBootLog(@"constructor fired");
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
+        YkBootLog(@"autostart timer fired, windows=%lu", (unsigned long)UIApplication.sharedApplication.windows.count);
         for (UIWindow *w in UIApplication.sharedApplication.windows) {
             UIViewController *r = w.rootViewController;
             if ([r isKindOfClass:[UINavigationController class]])
                 r = ((UINavigationController *)r).viewControllers.firstObject;
+            YkBootLog(@"rootVC=%@ responds=%d", NSStringFromClass([r class]),
+                      [r respondsToSelector:NSSelectorFromString(@"startEngineIfNeeded")]);
             if ([r respondsToSelector:NSSelectorFromString(@"startEngineIfNeeded")]) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
