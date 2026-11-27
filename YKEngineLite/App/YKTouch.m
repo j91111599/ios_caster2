@@ -1,3 +1,4 @@
+#include <stdio.h>
 #import <mach/mach_time.h>
 //  YKTouch.m — 触控注入（IOHIDEventSystemClient，私有符号 dlsym）
 //
@@ -85,20 +86,26 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
     // 父事件：transducerType = 3 (Hand)
+    fprintf(stderr, "[touch] step1 before DigitizerEvent\n"); fflush(stderr);
     IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
                                              3, 0, 0, mask, 0,
                                              x, y, 0.0, press, 0.0, 1, touch, 0);
+    fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
 
+    fprintf(stderr, "[touch] step3 before FingerEvent\n"); fflush(stderr);
     IOHIDEventRef fingerEv = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
                                               finger, finger, mask, 0,
                                               x, y, 0.0, press, 0.0, 1, touch, 0);
+    fprintf(stderr, "[touch] step4 finger=%p append=%p\n", (void *)fingerEv, fa); fflush(stderr);
     if (fingerEv) {
         if (fa) ((YkAppendFn)fa)(hand, fingerEv, 0);
+        fprintf(stderr, "[touch] step5 appended\n"); fflush(stderr);
         CFRelease(fingerEv);
     }
 
     YkSendEvent(hand);
+    fprintf(stderr, "[touch] step6 dispatched\n"); fflush(stderr);
     CFRelease(hand);
 }
 
