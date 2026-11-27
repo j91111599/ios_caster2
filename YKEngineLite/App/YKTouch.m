@@ -43,14 +43,32 @@ static void *YkSym(const char *name) {
 }
 
 static IOHIDEventSystemClientRef YkHIDClient(void) {
-    if (gHIDClient) return gHIDClient;
-    void *s1 = YkSym("IOHIDEventSystemClientCreateWithType");
-    if (s1) gHIDClient = ((IOHIDEventSystemClientRef (*)(int))s1)(2);
-    if (!gHIDClient) {
-        void *s2 = YkSym("IOHIDEventSystemClientCreate");
-        if (s2) gHIDClient = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef))s2)(kCFAllocatorDefault);
+    static IOHIDEventSystemClientRef client = NULL;
+    static BOOL tried = NO;
+    if (tried) return client;
+    tried = YES;
+
+    void *h = YkSym("IOHIDEventSystemClientCreateWithType");
+    if (h) {
+        // (CFAllocatorRef, IOHIDEventSystemClientType, CFDictionaryRef)
+        typedef IOHIDEventSystemClientRef (*T3)(CFAllocatorRef, int, CFDictionaryRef);
+        client = ((T3)h)(kCFAllocatorDefault, 2 /*Inject*/, NULL);
     }
-    return gHIDClient;
+    if (!client) {
+        void *h2 = YkSym("IOHIDEventSystemClientCreate");
+        if (h2) client = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef))h2)(kCFAllocatorDefault);
+    }
+    if (client) {
+        void *hs = YkSym("IOHIDEventSystemClientScheduleWithRunLoop");
+        if (hs) {
+            typedef void (*SchedFn)(IOHIDEventSystemClientRef, CFRunLoopRef, CFStringRef);
+            ((SchedFn)hs)(client, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+        }
+        fprintf(stderr, "[touch] client=%p\n", (void *)client); fflush(stderr);
+    } else {
+        fprintf(stderr, "[touch] client=NULL\n"); fflush(stderr);
+    }
+    return client;
 }
 
 static void YkSendEvent(IOHIDEventRef ev) {
@@ -104,6 +122,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
         CFRelease(fingerEv);
     }
 
+    fprintf(stderr, "[touch] step5b before dispatch client=%p\n", (void *)YkHIDClient()); fflush(stderr);
     YkSendEvent(hand);
     fprintf(stderr, "[touch] step6 dispatched\n"); fflush(stderr);
     CFRelease(hand);
