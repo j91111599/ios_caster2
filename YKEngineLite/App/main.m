@@ -737,3 +737,23 @@ int main(int argc, char *argv[]) {
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([YKAppDelegate class]));
     }
 }
+
+
+// 保证引擎一定启动：进程起来 1.5 秒后从窗口树找到根 VC 调用 startEngineIfNeeded
+__attribute__((constructor))
+static void YKAutostartEngine(void) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        for (UIWindow *w in UIApplication.sharedApplication.windows) {
+            UIViewController *r = w.rootViewController;
+            if ([r isKindOfClass:[UINavigationController class]])
+                r = ((UINavigationController *)r).viewControllers.firstObject;
+            if ([r respondsToSelector:NSSelectorFromString(@"startEngineIfNeeded")]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                [r performSelector:NSSelectorFromString(@"startEngineIfNeeded")];
+#pragma clang diagnostic pop
+            }
+        }
+    });
+}
