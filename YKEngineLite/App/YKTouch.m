@@ -31,33 +31,6 @@ static NSDictionary *YkPortSend(NSDictionary *req) {
 uint64_t gYkSenderID = 0;
 
 
-// 枚举 HID 服务，拿到触摸屏的 registry ID（= senderID 候选）
-static uint64_t YkFindTouchSenderID(void) {
-    void *fc = YkSym("IOHIDEventSystemClientCopyServices");
-    void *fr = YkSym("IOHIDServiceClientGetRegistryID");
-    if (!fc || !fr) { fprintf(stderr, "[touch] no CopyServices sym\n"); return 0; }
-
-    IOHIDEventSystemClientRef cl = YkHIDClient();
-    if (!cl) return 0;
-
-    CFArrayRef svcs = ((CFArrayRef (*)(IOHIDEventSystemClientRef))fc)(cl);
-    if (!svcs) { fprintf(stderr, "[touch] CopyServices=NULL\n"); fflush(stderr); return 0; }
-
-    CFIndex n = CFArrayGetCount(svcs);
-    fprintf(stderr, "[touch] services=%ld\n", (long)n); fflush(stderr);
-
-    uint64_t found = 0;
-    for (CFIndex i = 0; i < n; i++) {
-        void *svc = (void *)CFArrayGetValueAtIndex(svcs, i);
-        if (!svc) continue;
-        uint64_t rid = ((uint64_t (*)(void *))fr)(svc);
-        fprintf(stderr, "[touch]   svc[%ld] rid=%llu\n", (long)i, (unsigned long long)rid);
-        if (!found && rid) found = rid;
-    }
-    fflush(stderr);
-    CFRelease(svcs);
-    return found;
-}
 
 typedef struct __IOHIDEvent *IOHIDEventRef;
 typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
@@ -100,6 +73,34 @@ static IOHIDEventSystemClientRef YkHIDClient(void) {
         fprintf(stderr, "[touch] client=NULL\n"); fflush(stderr);
     }
     return client;
+}
+
+// 枚举 HID 服务，拿到触摸屏的 registry ID（= senderID 候选）
+static uint64_t YkFindTouchSenderID(void) {
+    void *fc = YkSym("IOHIDEventSystemClientCopyServices");
+    void *fr = YkSym("IOHIDServiceClientGetRegistryID");
+    if (!fc || !fr) { fprintf(stderr, "[touch] no CopyServices sym\n"); return 0; }
+
+    IOHIDEventSystemClientRef cl = YkHIDClient();
+    if (!cl) return 0;
+
+    CFArrayRef svcs = ((CFArrayRef (*)(IOHIDEventSystemClientRef))fc)(cl);
+    if (!svcs) { fprintf(stderr, "[touch] CopyServices=NULL\n"); fflush(stderr); return 0; }
+
+    CFIndex n = CFArrayGetCount(svcs);
+    fprintf(stderr, "[touch] services=%ld\n", (long)n); fflush(stderr);
+
+    uint64_t found = 0;
+    for (CFIndex i = 0; i < n; i++) {
+        void *svc = (void *)CFArrayGetValueAtIndex(svcs, i);
+        if (!svc) continue;
+        uint64_t rid = ((uint64_t (*)(void *))fr)(svc);
+        fprintf(stderr, "[touch]   svc[%ld] rid=%llu\n", (long)i, (unsigned long long)rid);
+        if (!found && rid) found = rid;
+    }
+    fflush(stderr);
+    CFRelease(svcs);
+    return found;
 }
 
 static void YkSendEvent(IOHIDEventRef ev) {
