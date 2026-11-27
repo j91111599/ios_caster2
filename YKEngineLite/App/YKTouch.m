@@ -1,3 +1,4 @@
+#import <mach/mach_time.h>
 //  YKTouch.m — 触控注入（IOHIDEventSystemClient，私有符号 dlsym）
 //
 //  依赖：App 已签 platform-application + no-sandbox（本项目已具备）
@@ -57,40 +58,63 @@ static void YkSendEvent(IOHIDEventRef ev) {
         ((void (*)(IOHIDEventSystemClientRef, IOHIDEventRef))d)(YkHIDClient(), ev);
 }
 
-// 正确签名（14 参数）：
-//   IOHIDEventCreateDigitizerFingerEvent(alloc, time, index, identity,
-//        eventMask, buttonMask, x, y, z, tipPressure, twist,
-//        range, touch, options)
+// IOHIDEventCreateDigitizerEvent(alloc, time, type, index, identity, eventMask,
+//     buttonMask, x, y, z, tipPressure, barrelPressure, range, touch, options)
+typedef IOHIDEventRef (*YkDigitizerFn)(CFAllocatorRef, uint64_t, uint32_t, uint32_t,
+                                       uint32_t, uint32_t, uint32_t, double, double,
+                                       double, double, double, int, int, uint32_t);
+
+// IOHIDEventCreateDigitizerFingerEvent(alloc, time, index, identity, eventMask,
+//     buttonMask, x, y, z, tipPressure, twist, range, touch, options)
 typedef IOHIDEventRef (*YkFingerFn)(CFAllocatorRef, uint64_t, uint32_t, uint32_t,
                                     uint32_t, uint32_t, double, double, double,
                                     double, double, int, int, uint32_t);
 
-static IOHIDEventRef YkMakeFinger(int phase, double x, double y,
-                                  uint32_t finger, double pressure, uint64_t ts) {
-    void *f = YkSym("IOHIDEventCreateDigitizerFingerEvent");
-    if (!f) return NULL;
-    uint32_t mask  = 3;                       // Range | Touch
-    int      touch = (phase == 2) ? 0 : 1;    // up 时 touch=0
+typedef void (*YkAppendFn)(IOHIDEventRef, IOHIDEventRef, uint32_t);
+
+// 标准三段式：父 digitizer 事件 + 手指子事件 + 显示集成标记
+static void YkInject(int phase, double x, double y, uint32_t finger, double pressure) {
+    void *fp = YkSym("IOHIDEventCreateDigitizerEvent");
+    void *ff = YkSym("IOHIDEventCreateDigitizerFingerEvent");
+    void *fa = YkSym("IOHIDEventAppendEvent");
+    if (!fp || !ff) return;
+
+    uint64_t ts = mach_absolute_time();
+    uint32_t mask  = 3;                        // Range | Touch
+    int      touch = (phase == 2) ? 0 : 1;
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
-    return ((YkFingerFn)f)(kCFAllocatorDefault, ts,
-                           finger, finger, mask, 0,
-                           x, y, 0.0, press, 0.0, 1, touch, 0);
+
+    // 父事件：transducerType = 3 (Hand)
+    IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
+                                             3, 0, 0, mask, 0,
+                                             x, y, 0.0, press, 0.0, 1, touch, 0);
+    if (!hand) return;
+
+    IOHIDEventRef fingerEv = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
+                                              finger, finger, mask, 0,
+                                              x, y, 0.0, press, 0.0, 1, touch, 0);
+    if (fingerEv) {
+        if (fa) ((YkAppendFn)fa)(hand, fingerEv, 0);
+        CFRelease(fingerEv);
+    }
+
+    YkSendEvent(hand);
+    CFRelease(hand);
 }
 
 static void YkFingerEvent(int phase, double x, double y, double pressure, uint64_t ts) {
-    IOHIDEventRef ev = YkMakeFinger(phase, x, y, 1, pressure, ts);
-    if (ev) { YkSendEvent(ev); CFRelease(ev); }
+    (void)ts;
+    YkInject(phase, x, y, 1, pressure);
 }
 
 static void YkTwoFingerEvent(int phase, double x1, double y1, double x2, double y2, uint64_t ts) {
-    IOHIDEventRef e1 = YkMakeFinger(phase, x1, y1, 1, 1.0, ts);
-    IOHIDEventRef e2 = YkMakeFinger(phase, x2, y2, 2, 1.0, ts);
-    if (e1) { YkSendEvent(e1); CFRelease(e1); }
-    if (e2) { YkSendEvent(e2); CFRelease(e2); }
+    (void)ts;
+    YkInject(phase, x1, y1, 1, 1.0);
+    YkInject(phase, x2, y2, 2, 1.0);
 }
 
 static uint64_t YkNow(void) {
-    return (uint64_t)([[NSProcessInfo processInfo] systemUptime] * 1000000000ULL);
+    return mach_absolute_time();
 }
 
 NSDictionary *YkTouchTap(double x, double y) {
