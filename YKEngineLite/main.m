@@ -210,7 +210,7 @@ int main(int argc, char *argv[]) {
 
         HTTPServer *server = [HTTPServer new];
         server.port = YKListenPort();
-        server.interface = @"loopback";
+        server.interface = @"any";
         server.requiresSessionHeader = NO;
 
         // 逐模块注册（路由表来自 Recovered/YKRoutesLive.m 的实测清单；
