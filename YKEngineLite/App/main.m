@@ -532,7 +532,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     if (_srv) return;
     _srv = [HTTPServer new];
     _srv.port = 65324;
-    _srv.interface = @"loopback";
+    _srv.interface = @"any";   // 监听所有网卡，PC 可直连
     __weak typeof(self) weakSelf = self;
     [_srv get:@"/health" withBlock:^(RouteRequest *req, RouteResponse *res) {
         [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
@@ -580,7 +580,7 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
         if (!_srv) {
             _srv = [HTTPServer new];
             _srv.port = 65324;
-            _srv.interface = @"loopback";
+            _srv.interface = @"any";   // 监听所有网卡，PC 可直连
             [_srv get:@"/health" withBlock:^(RouteRequest *req, RouteResponse *res) {
                 [res respondWithJSON:@{ @"value": @{ @"state": @"ready", @"ready": @YES,
                                                      @"engine": @"reconstructed-inapp",
