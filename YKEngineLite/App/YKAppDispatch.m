@@ -1,3 +1,4 @@
+#import <objc/runtime.h>
 //  YKAppDispatch — 把 daemon 已实现的 341 条 handler 接入 App 内引擎
 //
 //  覆盖族：file(21) prefs(11) plist(6) crypto(21) screen(6) network(21) ui(245)
@@ -214,6 +215,41 @@ static NSDictionary *YKErr(NSString *code, NSString *msg) {
     return @{ @"value": @{ @"error": code, @"message": msg ?: @"" } };
 }
 
+
+#pragma mark - 运行时方法探测（零风险，只读）
+
+static NSArray *YkProbeOne(const char *clsName, NSArray *keywords) {
+    Class cls = objc_getClass(clsName);
+    if (!cls) return @[];
+    NSMutableArray *out = [NSMutableArray array];
+    unsigned int n = 0;
+    Method *ms = class_copyMethodList(cls, &n);
+    for (unsigned int i = 0; i < n; i++) {
+        NSString *sel = NSStringFromSelector(method_getName(ms[i]));
+        NSString *low = sel.lowercaseString;
+        BOOL hit = (keywords.count == 0);
+        for (NSString *k in keywords) if ([low containsString:k]) { hit = YES; break; }
+        if (!hit) continue;
+        const char *enc = method_getTypeEncoding(ms[i]);
+        [out addObject:@{ @"class": @(clsName),
+                          @"sel": sel,
+                          @"enc": @(enc ? enc : "") }];
+    }
+    if (ms) free(ms);
+    return out;
+}
+
+static NSDictionary *YkProbeClasses(void) {
+    NSArray *kw = @[@"screen", @"surface", @"snapshot", @"capture", @"snap"];
+    NSMutableArray *all = [NSMutableArray array];
+    const char *classes[] = { "UIWindow", "UIScreen", "UIView", "CAContext",
+                              "CALayer", "UIApplication", "_UIScreen", "UIScene" };
+    for (int i = 0; i < (int)(sizeof(classes)/sizeof(classes[0])); i++) {
+        [all addObjectsFromArray:YkProbeOne(classes[i], kw)];
+    }
+    return @{ @"value": @{ @"count": @(all.count), @"methods": all } };
+}
+
 NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
                                  NSDictionary *body, NSDictionary *query)
 {
@@ -250,6 +286,12 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
         return YKErr(@"not_found", verb);
     }
 
+
+    // ---- debug/probe：枚举系统私有方法（只读，零风险）----
+    if ([head isEqualToString:@"debug"] && seg.count > 1 &&
+        [seg[1] isEqualToString:@"probe"]) {
+        return YkProbeClasses();
+    }
 
     // ---- mirror（CARenderServer + MJPEG + WebSocket）----
     if ([head isEqualToString:@"mirror"]) {
