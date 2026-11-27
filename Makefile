@@ -14,7 +14,8 @@ ykenginelite_FILES = \
 	YKEngineLite/Compat/SSZipArchiveCompat.m \
 	YKEngineLite/Recovered/YKCryptoNetworkModules.m \
 	YKEngineLite/Recovered/YKUtilityModules.m \
-	YKEngineLite/Recovered/YKUIModule.m
+	YKEngineLite/Recovered/YKUIModule.m \
+	YKEngineLite/App/YKTouch.m
 ykenginelite_FRAMEWORKS = Foundation UIKit Network Security NetworkExtension
 ykenginelite_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-nullability-completeness -IYKEngineLite/Compat -IYKEngineLite/Recovered
 ykenginelite_LDFLAGS = -fuse-ld=lld

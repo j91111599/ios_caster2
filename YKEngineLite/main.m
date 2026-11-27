@@ -13,6 +13,10 @@
 #import "YKHTTPServerCompat.h"
 
 // 模块入口（来自 Recovered/*.m）
+extern NSDictionary *YkTouchTap(double x, double y);
+extern NSDictionary *YkTouchLongPress(double x, double y, double d);
+extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d);
+
 @interface YKFileModule : NSObject
 + (NSDictionary *)exists:(NSString *)p;
 + (NSDictionary *)size:(NSString *)p;
@@ -84,6 +88,21 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
     NSMutableArray *s = [NSMutableArray array];
     for (NSString *x in segs) if (x.length) [s addObject:x];
     NSString *head = s.count ? s[0] : @"";
+    // ---- touch（root 进程内直接 IOHID 注入）----
+    if ([head isEqualToString:@"touch"]) {
+        NSString *v = s.count > 1 ? s[1] : @"ping";
+        double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        if ([v isEqualToString:@"tap"])       return YkTouchTap(x, y);
+        if ([v isEqualToString:@"longPress"])  return YkTouchLongPress(x, y, [body[@"duration"] doubleValue]);
+        if ([v isEqualToString:@"swipe"])      return YkTouchSwipe(x, y,
+                                                   [body[@"toX"] doubleValue],
+                                                   [body[@"toY"] doubleValue],
+                                                   [body[@"duration"] doubleValue]);
+        if ([v isEqualToString:@"ping"])       return @{ @"value": @{ @"ok": @YES, @"pid": @(getpid()) } };
+        return @{ @"value.error": @"not_found", @"value.message": v };
+    }
+
+
 
     // ---- 服务级 ----
     if ([path isEqualToString:@"/health"]) {
