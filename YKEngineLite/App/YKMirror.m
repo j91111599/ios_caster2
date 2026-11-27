@@ -202,13 +202,7 @@ static void YkMirrorLoop(void) {
                 IOSurfaceRef s = YkRenderDisplay();
                 jpeg = YkEncodeJPEG(s, gMirrorQuality);
                 if (s) CFRelease(s);
-                if (!jpeg) {
-                    __block NSData *fb = nil;
-                    dispatch_sync(dispatch_get_main_queue(), ^{
-                        fb = YkGrabJPEGFallback(gMirrorQuality);
-                    });
-                    jpeg = fb;
-                }
+                if (!jpeg) jpeg = YkGrabJPEGFallback(gMirrorQuality);
             }
             if (jpeg) {
                 NSMutableArray *dead = [NSMutableArray array];
@@ -226,11 +220,12 @@ static void YkMirrorLoop(void) {
 
 #pragma mark - 对外接口
 
-NSDictionary *YkMirrorStart(NSInteger port, NSInteger fps, double quality) {
+NSDictionary *YkMirrorStart(NSInteger port, NSInteger fps, double quality, double scale) {
     if (gMirrorRunning) return @{ @"value": @{ @"running": @YES, @"port": @(gMirrorPort) } };
     if (port > 0) gMirrorPort = (int)port;
     if (fps > 0) gMirrorFps = (int)fps;
     if (quality > 0) gMirrorQuality = quality;
+    gMirrorScale = (scale > 0.1 && scale <= 1.0) ? scale : 1.0;
     gMirrorRunning = YES;
     gMirrorThread = [[NSThread alloc] initWithBlock:^{ YkMirrorLoop(); }];
     gMirrorThread.name = @"YKMirror";
@@ -258,30 +253,45 @@ NSDictionary *YkMirrorStatus(void) {
 }
 
 // 回退取帧：UIGraphics 渲染主窗口（不依赖私有 API）
+static double gMirrorScale = 1.0;
+
 static NSData *YkGrabJPEGFallback(double quality) {
-    UIWindow *win = nil;
-    for (UIWindow *w in UIApplication.sharedApplication.windows)
-        if (w.isKeyWindow) { win = w; break; }
-    if (!win) win = UIApplication.sharedApplication.windows.firstObject;
-    if (!win) return nil;
+    __block NSData *result = nil;
+    void (^work)(void) = ^{
+        UIWindow *win = nil;
+        for (UIWindow *w in UIApplication.sharedApplication.windows)
+            if (w.isKeyWindow) { win = w; break; }
+        if (!win) win = UIApplication.sharedApplication.windows.firstObject;
+        if (!win) return;
 
-    UIGraphicsBeginImageContextWithOptions(win.bounds.size, NO, 0);
-    CGContextRef ctx = UIGraphicsGetCurrentContext();
-    // 用 renderInContext（drawViewHierarchy 在后台会返回空白）
-    [win.layer renderInContext:ctx];
-    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    if (!img) return nil;
+        double sc = gMirrorScale > 0.1 ? gMirrorScale : 1.0;
+        if (sc > 1.0) sc = 1.0;
+        CGSize pt = win.bounds.size;
+        CGSize out = CGSizeMake(pt.width * sc, pt.height * sc);
 
-    NSMutableData *md = [NSMutableData data];
-    CGImageDestinationRef dst = CGImageDestinationCreateWithData(
-        (__bridge CFMutableDataRef)md, CFSTR("public.jpeg"), 1, NULL);
-    if (!dst) return nil;
-    NSDictionary *opts = @{ (id)kCGImageDestinationLossyCompressionQuality: @(quality) };
-    CGImageDestinationAddImage(dst, img.CGImage, (__bridge CFDictionaryRef)opts);
-    BOOL ok = CGImageDestinationFinalize(dst);
-    CFRelease(dst);
-    return ok ? md : nil;
+        UIGraphicsBeginImageContextWithOptions(out, NO, 1.0);
+        CGContextRef ctx = UIGraphicsGetCurrentContext();
+        CGContextScaleCTM(ctx, sc, sc);
+        BOOL drawn = [win drawViewHierarchyInRect:CGRectMake(0, 0, pt.width, pt.height)
+                               afterScreenUpdates:NO];
+        if (!drawn) [win.layer renderInContext:ctx];
+        UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        if (!img) return;
+
+        NSMutableData *md = [NSMutableData data];
+        CGImageDestinationRef dst = CGImageDestinationCreateWithData(
+            (__bridge CFMutableDataRef)md, CFSTR("public.jpeg"), 1, NULL);
+        if (!dst) return;
+        NSDictionary *opts = @{ (id)kCGImageDestinationLossyCompressionQuality: @(quality) };
+        CGImageDestinationAddImage(dst, img.CGImage, (__bridge CFDictionaryRef)opts);
+        BOOL fin = CGImageDestinationFinalize(dst);
+        CFRelease(dst);
+        if (fin) result = md;
+    };
+    if ([NSThread isMainThread]) work();
+    else dispatch_sync(dispatch_get_main_queue(), work);
+    return result;
 }
 
 // 单帧抓取（调试用）

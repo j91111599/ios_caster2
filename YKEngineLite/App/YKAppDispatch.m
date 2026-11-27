@@ -257,7 +257,8 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
         if ([verb isEqualToString:@"start"])
             return YkMirrorStart([body[@"port"] integerValue],
                                  [body[@"fps"] integerValue],
-                                 [body[@"quality"] doubleValue]);
+                                 [body[@"quality"] doubleValue],
+                                 body[@"scale"] ? [body[@"scale"] doubleValue] : 1.0);
         if ([verb isEqualToString:@"stop"])   return YkMirrorStop();
         if ([verb isEqualToString:@"status"]) return YkMirrorStatus();
         if ([verb isEqualToString:@"grab"])   return YkMirrorGrabFrame([body[@"quality"] doubleValue]);
