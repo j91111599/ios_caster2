@@ -43,29 +43,36 @@ static volatile BOOL gMirrorRunning = NO;
 #pragma mark - CARenderServer 私有符号
 
 static IOSurfaceRef YkRenderDisplay(void) {
-    static void *h = NULL;
-    static void *sym = NULL;
-    if (!h) { h = dlopen("/System/Library/Frameworks/QuartzCore.framework/QuartzCore", RTLD_LAZY); }
-    if (!sym && h) { sym = dlsym(h, "CARenderServerRenderDisplay"); }
-    if (!sym) return NULL;
+    static void *qc = NULL;
+    static void *fPort = NULL, *fSnap = NULL;
+    if (!qc) qc = dlopen("/System/Library/Frameworks/QuartzCore.framework/QuartzCore", RTLD_LAZY);
+    if (!qc) return NULL;
+    if (!fPort) fPort = dlsym(qc, "CARenderServerGetServerPort");
+    if (!fSnap) fSnap = dlsym(qc, "CARenderServerCreateSnapshots");
+    if (!fPort || !fSnap) return NULL;
 
-    typedef IOSurfaceRef (*RenderFn)(uint32_t, CFStringRef, uint32_t, uint32_t, IOSurfaceRef);
-    RenderFn fn = (RenderFn)sym;
+    typedef unsigned int (*PortFn)(void *);
+    PortFn getPort = (PortFn)fPort;
+    unsigned int srv = getPort(NULL);
+    if (!srv) return NULL;
 
     CGFloat scale = [UIScreen mainScreen].scale;
-    uint32_t w = (uint32_t)([UIScreen mainScreen].bounds.size.width  * scale);
-    uint32_t h2 = (uint32_t)([UIScreen mainScreen].bounds.size.height * scale);
+    CGRect r = CGRectMake(0, 0,
+                          [UIScreen mainScreen].bounds.size.width  * scale,
+                          [UIScreen mainScreen].bounds.size.height * scale);
 
-    NSDictionary *attrs = @{ (id)kIOSurfaceWidth:  @(w),
-                             (id)kIOSurfaceHeight: @(h2),
-                             (id)kIOSurfaceBytesPerElement: @4,
-                             (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA') };
-    IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)attrs);
-    if (!surface) return NULL;
+    // CFArrayRef CARenderServerCreateSnapshots(mach_port_t, uint32_t display,
+    //        uint32_t count, const CGRect *rects, uint32_t seed, uint32_t options)
+    typedef CFArrayRef (*SnapFn)(unsigned int, unsigned int, unsigned int,
+                                 const CGRect *, unsigned int, unsigned int);
+    SnapFn snap = (SnapFn)fSnap;
+    CFArrayRef arr = snap(srv, 0, 1, &r, 0, 0);
+    if (!arr || CFArrayGetCount(arr) == 0) return NULL;
 
-    IOSurfaceRef out = fn(0, CFSTR("LCD"), w, h2, surface);
-    if (out) { CFRelease(surface); return out; }
-    return surface;
+    IOSurfaceRef out = (IOSurfaceRef)CFArrayGetValueAtIndex(arr, 0);
+    if (out) CFRetain(out);
+    CFRelease(arr);
+    return out;
 }
 
 #pragma mark - 帧编码（硬件 JPEG）
@@ -236,7 +243,7 @@ NSDictionary *YkMirrorGrabFrame(double quality) {
     IOSurfaceRef s = YkRenderDisplay();
     NSData *jpeg = YkEncodeJPEG(s, quality > 0 ? quality : 0.8);
     if (s) CFRelease(s);
-    if (!jpeg) return @{ @"value": @{ @"error": @"capture_failed" } };
+    if (!jpeg) return @{ @"value": @{ @"error": @"capture_failed", @"surface": @(s != NULL) } };
     return @{ @"value": @{ @"base64": [jpeg base64EncodedStringWithOptions:0],
                            @"bytes": @(jpeg.length),
                            @"codec": @"jpeg" } };
