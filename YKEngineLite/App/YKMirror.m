@@ -34,6 +34,7 @@ extern const CFStringRef kIOSurfacePixelFormat;
 typedef struct _CARenderServer *CARenderServerRef;
 
 static NSData *YkGrabJPEGFallback(double quality);
+static IOSurfaceRef YkRenderDisplayUnsafe(void);
 
 static int gMirrorPort = 65330;
 static int gMirrorFps  = 20;
@@ -45,6 +46,12 @@ static volatile BOOL gMirrorRunning = NO;
 #pragma mark - CARenderServer 私有符号
 
 static IOSurfaceRef YkRenderDisplay(void) {
+    // CARenderServerCreateSnapshots 的私有签名尚未确定，调用会崩溃，暂时禁用
+    if (!getenv("YK_ENABLE_CARENDERSERVER")) return NULL;
+    return YkRenderDisplayUnsafe();
+}
+
+static IOSurfaceRef YkRenderDisplayUnsafe(void) {
     static void *qc = NULL;
     static void *fPort = NULL, *fSnap = NULL;
     if (!qc) qc = dlopen("/System/Library/Frameworks/QuartzCore.framework/QuartzCore", RTLD_LAZY);
