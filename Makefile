@@ -38,7 +38,7 @@ include $(THEOS_MAKE_PATH)/application.mk
 # ---- SpringBoard 触控注入 tweak ----
 TWEAK_NAME = YKSpringTouch
 YKSpringTouch_FILES = YKTouchSpring/YKSpringTouch.m
-YKSpringTouch_CFLAGS = -fobjc-arc -Wno-nullability-completeness -Wno-deprecated-declarations
+YKSpringTouch_CFLAGS = -fobjc-arc -Wno-nullability-completeness -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable
 YKSpringTouch_FRAMEWORKS = UIKit Foundation CoreFoundation
 YKSpringTouch_LDFLAGS = -fuse-ld=lld
 YKSpringTouch_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
