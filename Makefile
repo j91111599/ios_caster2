@@ -35,5 +35,15 @@ YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources/AppIcon60x60@2x.png YKEngine
 
 include $(THEOS_MAKE_PATH)/application.mk
 
+# ---- SpringBoard 触控注入 tweak ----
+TWEAK_NAME = YKSpringTouch
+YKSpringTouch_FILES = YKTouchSpring/YKSpringTouch.m
+YKSpringTouch_CFLAGS = -fobjc-arc -Wno-nullability-completeness -Wno-deprecated-declarations
+YKSpringTouch_FRAMEWORKS = UIKit Foundation
+YKSpringTouch_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
+
+include $(THEOS_MAKE_PATH)/tweak.mk
+
+
 after-install::
 	install.exec "killall -9 ykenginelite 2>/dev/null; launchctl unload /var/containers/Bundle/Application/.jbroot-*/Library/LaunchDaemons/com.yk.enginelite.plist 2>/dev/null; uicache -a"

@@ -144,15 +144,31 @@ static CFDataRef PortCallback(CFMessagePortRef port, SInt32 msgid, CFDataRef dat
     return (__bridge_retained CFDataRef)resp;
 }
 
+// 独立线程跑自己的 runloop —— 绝不能在构造函数里用 CFGetCurrentRunLoop
+// 原版同样做法：NSThread "com.sky.ykpro.MachPortListenerThread"
+static void YKPortThreadMain(void) {
+    @autoreleasepool {
+        CFMessagePortRef local = CFMessagePortCreateLocal(kCFAllocatorDefault,
+                                                          CFSTR("com.yk.touch"),
+                                                          PortCallback, NULL, NULL);
+        if (!local) return;
+        CFRunLoopSourceRef src = CFMessagePortCreateRunLoopSource(kCFAllocatorDefault, local, 0);
+        if (src) {
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), src, kCFRunLoopCommonModes);
+            CFRelease(src);
+        }
+        CFRunLoopRun();     // 线程自己的循环，不碰 SpringBoard 主线程
+    }
+}
+
 __attribute__((constructor))
 static void YKSpringTouchInit(void) {
-    CFMessagePortRef local = CFMessagePortCreateLocal(kCFAllocatorDefault,
-                                                      CFSTR("com.yk.touch"),
-                                                      PortCallback, NULL, NULL);
-    if (!local) return;
-    CFRunLoopSourceRef src = CFMessagePortCreateRunLoopSource(kCFAllocatorDefault, local, 0);
-    if (src) {
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), src, kCFRunLoopCommonModes);
-        CFRelease(src);
-    }
+    // 延后到主 runloop 起来之后再启线程，避免 SpringBoard 启动阶段崩溃
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        NSThread *t = [[NSThread alloc] initWithBlock:^{ YKPortThreadMain(); }];
+        t.name = @"YKTouchListener";
+        t.stackSize = 512 * 1024;
+        [t start];
+    });
 }
