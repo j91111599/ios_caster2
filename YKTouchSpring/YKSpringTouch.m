@@ -109,18 +109,16 @@ static NSData *HandleLine(NSString *line) {
     NSDictionary *resp = nil;
 
     if ([action isEqualToString:@"tap"]) {
-        DoTap(x, y);
+        /* HID disabled */ (void)x; (void)y;
         resp = @{ @"ok": @YES, @"action": action, @"x": @(x), @"y": @(y) };
     } else if ([action isEqualToString:@"longPress"]) {
-        DoLongPress(x, y, [req[@"duration"] doubleValue] ?: 1.0);
+        /* HID disabled */ (void)x; (void)y;
         resp = @{ @"ok": @YES, @"action": action };
     } else if ([action isEqualToString:@"swipe"]) {
-        DoSwipe(x, y, [req[@"toX"] doubleValue], [req[@"toY"] doubleValue],
-                [req[@"duration"] doubleValue] ?: 0.3, (int)([req[@"steps"] integerValue] ?: 12));
+        /* HID disabled */
         resp = @{ @"ok": @YES, @"action": action };
     } else if ([action isEqualToString:@"multi"]) {
-        DoMulti(x, y, [req[@"x2"] doubleValue], [req[@"y2"] doubleValue],
-                [req[@"duration"] doubleValue] ?: 0.3);
+        /* HID disabled */
         resp = @{ @"ok": @YES, @"action": action };
     } else if ([action isEqualToString:@"ping"]) {
         resp = @{ @"ok": @YES, @"client": @(YkClient() != NULL), @"pid": @(getpid()) };
