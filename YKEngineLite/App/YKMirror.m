@@ -36,6 +36,7 @@ typedef struct _CARenderServer *CARenderServerRef;
 static NSData *YkGrabJPEGFallback(double quality);
 static IOSurfaceRef YkRenderDisplayUnsafe(void);
 
+static double gMirrorScale = 1.0;
 static int gMirrorPort = 65330;
 static int gMirrorFps  = 20;
 static double gMirrorQuality = 0.6;
@@ -253,8 +254,6 @@ NSDictionary *YkMirrorStatus(void) {
 }
 
 // 回退取帧：UIGraphics 渲染主窗口（不依赖私有 API）
-static double gMirrorScale = 1.0;
-
 static NSData *YkGrabJPEGFallback(double quality) {
     __block NSData *result = nil;
     void (^work)(void) = ^{
