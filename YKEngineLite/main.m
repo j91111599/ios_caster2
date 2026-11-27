@@ -13,6 +13,7 @@
 #import "YKHTTPServerCompat.h"
 
 // 模块入口（来自 Recovered/*.m）
+extern uint64_t gYkSenderID;
 extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
 extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d);
@@ -92,6 +93,8 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
     if ([head isEqualToString:@"touch"]) {
         NSString *v = s.count > 1 ? s[1] : @"ping";
         double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        if (body[@"sender"]) gYkSenderID = [body[@"sender"] unsignedLongLongValue];
+        else gYkSenderID = 0;
         if ([v isEqualToString:@"tap"])       return YkTouchTap(x, y);
         if ([v isEqualToString:@"longPress"])  return YkTouchLongPress(x, y, [body[@"duration"] doubleValue]);
         if ([v isEqualToString:@"swipe"])      return YkTouchSwipe(x, y,

@@ -28,6 +28,8 @@ static NSDictionary *YkPortSend(NSDictionary *req) {
     return [out isKindOfClass:[NSDictionary class]] ? out : nil;
 }
 
+uint64_t gYkSenderID = 0;
+
 typedef struct __IOHIDEvent *IOHIDEventRef;
 typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
 
@@ -52,7 +54,7 @@ static IOHIDEventSystemClientRef YkHIDClient(void) {
     if (h) {
         // (CFAllocatorRef, IOHIDEventSystemClientType, CFDictionaryRef)
         typedef IOHIDEventSystemClientRef (*T3)(CFAllocatorRef, int, CFDictionaryRef);
-        client = ((T3)h)(kCFAllocatorDefault, 2 /*Inject*/, NULL);
+        client = ((T3)h)(kCFAllocatorDefault, 2 /*Inject*/, NULL); if (!client) { }
     }
     if (!client) {
         void *h2 = YkSym("IOHIDEventSystemClientCreate");
@@ -122,7 +124,15 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
         CFRelease(fingerEv);
     }
 
-    fprintf(stderr, "[touch] step5b before dispatch client=%p\n", (void *)YkHIDClient()); fflush(stderr);
+    // 原版会补 timestamp + senderID（SpringBoard 靠 senderID 判断事件来源）
+    void *fst = YkSym("IOHIDEventSetTimeStamp");
+    if (fst) ((void (*)(IOHIDEventRef, uint64_t))fst)(hand, mach_absolute_time());
+    if (gYkSenderID) {
+        void *fsi = YkSym("IOHIDEventSetSenderID");
+        if (fsi) ((void (*)(IOHIDEventRef, uint64_t))fsi)(hand, gYkSenderID);
+    }
+    fprintf(stderr, "[touch] step5b dispatch client=%p sender=%llu\n",
+            (void *)YkHIDClient(), (unsigned long long)gYkSenderID); fflush(stderr);
     // 标记为显示集成设备（坐标才映射到屏幕）
     void *fsv = YkSym("IOHIDEventSetIntegerValue");
     if (fsv) ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsv)(hand, 0x000B0005, 1);
