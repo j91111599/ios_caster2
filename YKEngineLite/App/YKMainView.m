@@ -190,6 +190,8 @@ extern NSString *YKEnginePort(void);
     _navRightBtn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
     [_navRightBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     _navRightBtn.tintColor = [UIColor whiteColor];
+    [_navRightBtn addTarget:self action:@selector(ykAddScript)
+           forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:_navRightBtn];
 }
 
