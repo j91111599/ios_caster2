@@ -31,5 +31,14 @@
 		<string>com.apple.iohid.server</string>
 		<string>com.apple.backboard.hid-services</string>
 	</array>
-</dict>
+	<key>com.apple.hid.manager.user-access</key>
+	<true/>
+	<key>com.apple.hid.multitouch.user-access</key>
+	<true/>
+	<key>com.apple.hid.system.user-access-service</key>
+	<true/>
+	<key>com.apple.private.skip-library-validation</key>
+	<true/>
+	<key>com.apple.private.security.no-container</key>
+	<true/></dict>
 </plist>
