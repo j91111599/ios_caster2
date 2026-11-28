@@ -521,7 +521,7 @@ extern NSString *YKEnginePort(void);
         NSArray *r = rsteps[i];
         UIView *row = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 100 + i * 58,
                                                               CARD_W - INNER_PAD * 2, 50)];
-        row.backgroundColor = [UIColor colorWithWhite(0.975, 1) colorWithAlphaComponent:1.0];
+        row.backgroundColor = [UIColor colorWithWhite:0.975 alpha:1.0];
         row.layer.cornerRadius = 10.0;
         [rc addSubview:row];
         [row addSubview:[self ykIconBox:CGRectMake(8, 9, 32, 32) symbol:r[2] tint:r[3] glyph:16]];
@@ -729,7 +729,7 @@ extern NSString *YKEnginePort(void);
     CGFloat y = 0;
     for (NSDictionary *r in recs) {
         UIView *row = [[UIView alloc] initWithFrame:CGRectMake(0, y, w, 84)];
-        row.backgroundColor = [UIColor colorWithWhite(0.975 alpha:1.0)];
+        row.backgroundColor = [UIColor colorWithWhite:0.975 alpha:1.0];
         row.layer.cornerRadius = 10.0;
         [_recordListBox addSubview:row];
 
@@ -786,7 +786,8 @@ extern NSString *YKEnginePort(void);
             [NSURL URLWithString:@"http://127.0.0.1:65325/record/play"]];
         r.HTTPMethod = @"POST"; r.HTTPBody = d;
         [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-        [[[NSURLSession sharedSession] dataTaskWithRequest:r completionHandler:nil] resume];
+        [[[NSURLSession sharedSession] dataTaskWithRequest:r
+                                     completionHandler:^(NSData *d2, NSURLResponse *r2, NSError *e2) {}] resume];
         // 回放前退到桌面（与原版一致）
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
