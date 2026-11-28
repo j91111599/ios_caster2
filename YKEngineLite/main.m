@@ -7,6 +7,7 @@
 //    · 未移植模块（触控注入、元素树、OCR、装包）返回 501 并给出原因
 //    · 响应包封与鉴权对齐设备实测（见 PROTOCOL_FINAL.md）
 //
+void YkHIDBoot(void);
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <signal.h>
