@@ -181,12 +181,13 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
         range = r ? 1 : 0;
         touch = tt ? 1 : 0;
     }
-    if (!range && !touch) {   // 抬起
-        [rec.steps addObject:@{ @"x": @(nx * 750), @"y": @(ny * 1334),
-                                @"touch": @0, @"delayMs": @16 }];
+    if (!range) {             // 抬起：记一个收尾点
+        if (nx > 0 || ny > 0) {
+            [rec.steps addObject:@{ @"x": @(nx * 750), @"y": @(ny * 1334),
+                                    @"touch": @0, @"delayMs": @16 }];
+        }
         return;
     }
-    if (!range) return;
     [rec.steps addObject:@{ @"x": @(nx * 750), @"y": @(ny * 1334),
                             @"touch": @1, @"delayMs": @16 }];
 }
