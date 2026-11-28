@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/var/containers/Bundle/Application/.jbroot-D7A0C9962DAD0DA5/usr/bin/sh
 # 安装后：注册 App 图标（uicache）+ 重启引擎 daemon（KeepAlive 会拉起新二进制）
 set +e
 LOG=/var/mobile/Media/yk_postinst.log
@@ -10,7 +10,7 @@ echo "[postinst] $(date) JB=$JB" >> "$LOG"
 if [ -x "$JB/usr/bin/uicache" ]; then
     "$JB/usr/bin/uicache" -a >> "$LOG" 2>&1
 else
-    uicache -a >> "$LOG" 2>&1
+    "$JB/usr/bin/uicache" -a >> "$LOG" 2>&1
 fi
 echo "[postinst] uicache rc=$?" >> "$LOG"
 
