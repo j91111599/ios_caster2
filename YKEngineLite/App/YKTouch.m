@@ -29,6 +29,7 @@ static NSDictionary *YkPortSend(NSDictionary *req) {
 }
 
 uint64_t gYkSenderID = 0;
+static int gYkUseCaptured = 0;
 
 
 
