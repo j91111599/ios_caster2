@@ -385,8 +385,16 @@ NSDictionary *YkTouchTap(double x, double y) {
 NSDictionary *YkTouchLongPress(double x, double y, double durationSec) {
     NSDictionary *r = YkPortSend(@{ @"action": @"longPress", @"x": @(x), @"y": @(y), @"duration": @(durationSec) });
     if (r) return @{ @"value": r };
+    if (durationSec <= 0) durationSec = 1.0;
     YkFingerEvent(1, x, y, 1.0, YkNow());
-    usleep((useconds_t)(durationSec * 1000000));
+    // 真实手指在按住期间会持续上报 move 帧；只发 down→up 时
+    // SpringBoard 的长按识别器不会触发（实测：必须补帧）。
+    NSInteger frames = (NSInteger)(durationSec * 1000 / 30);
+    if (frames < 1) frames = 1;
+    for (NSInteger i = 0; i < frames; i++) {
+        usleep(30000);
+        YkFingerEvent(3, x, y, 1.0, YkNow());
+    }
     YkFingerEvent(2, x, y, 0.0, YkNow());
     return @{ @"value": @{ @"action": @"longPress", @"x": @(x), @"y": @(y),
                            @"duration": @(durationSec), @"sent": @(YkHIDClient() != NULL) } };
@@ -423,7 +431,11 @@ NSDictionary *YkTouchMulti(int fingers, double x1, double y1, double x2, double 
                                        @"x2": @(x2), @"y2": @(y2), @"duration": @(durationSec) });
     if (rs) return @{ @"value": rs };
     YkTwoFingerEvent(1, x1, y1, x2, y2, YkNow());
-    usleep((useconds_t)(durationSec * 1000000));
+    NSInteger frames = (NSInteger)((durationSec > 0 ? durationSec : 0.3) * 1000 / 30);
+    for (NSInteger i = 0; i < frames; i++) {
+        usleep(30000);
+        YkTwoFingerEvent(3, x1, y1, x2, y2, YkNow());
+    }
     YkTwoFingerEvent(2, x1, y1, x2, y2, YkNow());
     return @{ @"value": @{ @"action": @"multi", @"fingers": @(fingers),
                            @"points": @[ @[ @(x1), @(y1) ], @[ @(x2), @(y2) ] ],
