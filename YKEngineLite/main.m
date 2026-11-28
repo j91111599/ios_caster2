@@ -94,6 +94,23 @@ static void YkRunCmd(NSString *cmd) {
 }
 
 
+
+static HTTPServer *gYKServiceServer = nil;
+static volatile int gYKServiceRunning = 1;
+
+BOOL YkServiceRunning(void);
+void YkSetServiceRunning(BOOL on);
+BOOL YkServiceRunning(void) { return gYKServiceRunning != 0; }
+void YkSetServiceRunning(BOOL on) {
+    if (on && !gYKServiceRunning && gYKServiceServer) {
+        NSError *e = nil;
+        if ([gYKServiceServer start:&e]) gYKServiceRunning = 1;
+    } else if (!on && gYKServiceRunning && gYKServiceServer) {
+        [gYKServiceServer stop];
+        gYKServiceRunning = 0;
+    }
+}
+
 static uint16_t YKListenPort(void) {
     NSString *cfg = @"/var/mobile/Library/YKEngineLite/config.plist";
     NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:cfg];
@@ -395,7 +412,6 @@ int main(int argc, char *argv[]) {
 
         HTTPServer *server = [HTTPServer new];
         gYKServiceServer = server;
-        gYKServer = server;
         server.port = YKListenPort();
         server.interface = @"any";
         server.requiresSessionHeader = NO;
