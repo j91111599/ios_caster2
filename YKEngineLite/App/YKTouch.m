@@ -35,34 +35,10 @@ static NSDictionary *YkPortSend(NSDictionary *req) {
 // senderID 必须是真实触摸屏服务的 registry ID，否则 SpringBoard 只把事件
 // 收进 HID 系统却不会派发给任何窗口（原版所有注入点都硬编码这一个值）。
 #define YK_SENDER_DEFAULT 0x8000000817319371ULL
-#define YK_SENDER_FILE    @"/var/mobile/Library/YKEngineLite/sender.txt"
+#define YK_CFG_PATH       @"/var/mobile/Library/YKEngineLite/config.plist"
 
-uint64_t gYkSenderID = 0;          // 0/1 = 自动解析；>1 = 指定值
-static uint64_t gYkSenderFile = 0; // 持久化缓存
+uint64_t gYkSenderID = 0;          // 0 = 自动；1 = 枚举服务；>1 = 指定值
 static int gYkUseCaptured = 0;
-
-static uint64_t YkSenderLoad(void) {
-    if (gYkSenderFile) return gYkSenderFile;
-    NSString *s = [NSString stringWithContentsOfFile:YK_SENDER_FILE
-                                            encoding:NSUTF8StringEncoding error:NULL];
-    s = [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (s.length) {
-        unsigned long long v = strtoull(s.UTF8String, NULL, 0);
-        if (v > 1) gYkSenderFile = v;
-    }
-    return gYkSenderFile;
-}
-
-static void YkSenderSave(uint64_t v) {
-    if (v <= 1 || v == gYkSenderFile) return;
-    gYkSenderFile = v;
-    [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/YKEngineLite"
-                              withIntermediateDirectories:YES attributes:nil error:NULL];
-    [[NSString stringWithFormat:@"%llu", (unsigned long long)v]
-        writeToFile:YK_SENDER_FILE atomically:YES encoding:NSUTF8StringEncoding error:NULL];
-}
-
-
 
 typedef struct __IOHIDEvent *IOHIDEventRef;
 typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
@@ -207,18 +183,25 @@ static uint64_t YkFindTouchSenderID(void) {
     return found;
 }
 
-// senderID 解析优先级：
-//   请求显式值(>1) > 已学习覆盖值(sender.txt) > 原版硬编码常量
-//   仅当请求显式传 sender=1 时才枚举服务（枚举到的第一个 digitizer 不一定是屏幕，
-//   原版自己也是硬编码这一个常量）。
+// senderID 解析优先级：请求显式值(>1) > config.plist 的 senderId > 原版硬编码常量。
+// 注意：不要用「枚举到的第一个 digitizer 服务」——那常常是 SPU/指纹等非屏幕服务，
+// 拿它当 sender 会让事件被 SpringBoard 丢弃（实测拿到的还是随机值）。
+// 仅当请求显式传 sender=1 时才枚举。
 static uint64_t YkResolveSender(void) {
     if (gYkSenderID > 1) return gYkSenderID;
     if (gYkSenderID == 1) {
         uint64_t v = YkFindTouchSenderID();
-        if (v > 1) { YkSenderSave(v); return v; }
+        if (v > 1) return v;
     }
-    uint64_t learned = YkSenderLoad();
-    if (learned > 1) return learned;
+    static uint64_t cfg = 0;
+    static BOOL cfgTried = NO;
+    if (!cfgTried) {
+        cfgTried = YES;
+        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:YK_CFG_PATH];
+        NSNumber *n = d[@"senderId"];
+        if (n.unsignedLongLongValue > 1) cfg = n.unsignedLongLongValue;
+    }
+    if (cfg > 1) return cfg;
     return YK_SENDER_DEFAULT;
 }
 
