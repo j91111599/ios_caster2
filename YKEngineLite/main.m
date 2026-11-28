@@ -79,6 +79,16 @@ extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 
 #pragma mark - 配置
 
+
+// system() 在 iOS SDK 中被标记不可用，用 posix_spawn 走 /bin/sh -c
+static void YkRunCmd(NSString *cmd) {
+    pid_t pid = 0;
+    const char *sh = "/bin/sh";
+    char *argv[] = { (char *)sh, (char *)"-c", (char *)cmd.UTF8String, NULL };
+    posix_spawn(&pid, sh, NULL, NULL, argv, environ);
+    if (pid > 0) { int st = 0; waitpid(pid, &st, 0); }
+}
+
 static uint16_t YKListenPort(void) {
     NSString *cfg = @"/var/mobile/Library/YKEngineLite/config.plist";
     NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:cfg];
@@ -271,7 +281,7 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
         if ([verb isEqualToString:@"respring"]) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
                            dispatch_get_global_queue(0, 0), ^{
-                system("killall -9 backboardd 2>/dev/null || killall -9 SpringBoard 2>/dev/null");
+                YkRunCmd(@"killall -9 backboardd 2>/dev/null || killall -9 SpringBoard 2>/dev/null");
             });
             return @{ @"value": @{ @"ok": @YES, @"action": @"respring" } };
         }
@@ -281,7 +291,7 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
             NSString *outPath = @"/var/mobile/Media/_daemon_sh.out";
             NSString *full = [NSString stringWithFormat:
                               @"( %@ ) > %@ 2>&1; echo $? >> %@", cmd, outPath, outPath];
-            system(full.UTF8String);
+            YkRunCmd(full);
             NSString *out = [NSString stringWithContentsOfFile:outPath
                                                       encoding:NSUTF8StringEncoding error:NULL] ?: @"";
             return @{ @"value": @{ @"output": out, @"exitCode": @0 } };
