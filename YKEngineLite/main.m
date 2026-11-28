@@ -240,6 +240,7 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
 #pragma mark - 入口
 
 int main(int argc, char *argv[]) {
+    @autoreleasepool { YkHIDBoot(); }
     @autoreleasepool {
         // 关键：忽略 SIGPIPE，否则向已关闭连接 write() 会直接杀死进程
         signal(SIGPIPE, SIG_IGN);

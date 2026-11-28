@@ -522,6 +522,13 @@ static void YkTryRecordEvent(void *event) {
     }
 }
 
+void YkHIDBoot(void) {
+    // 原版 YKService 在 init 里就创建 client，而不是懒加载
+    IOHIDEventSystemClientRef c = YkHIDClient();
+    fprintf(stderr, "[touch] BOOT client=%p type=%d\n", (void *)c, gYkClientType);
+    fflush(stderr);
+}
+
 NSDictionary *YkRecordArm(void) {
     gYkRecBlob = nil;
     gYkRecArmed = 1;
