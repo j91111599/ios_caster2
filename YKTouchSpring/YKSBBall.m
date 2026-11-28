@@ -174,12 +174,10 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
         ny = ((double (*)(void *, uint32_t))ff)(event, 0xB0001);
     }
 
-    int touch = 1, range = 1;
+    int range = 1;
     if (fg) {
         int64_t r = ((int64_t (*)(void *, uint32_t))fg)(event, 0xB0008);
-        int64_t tt = ((int64_t (*)(void *, uint32_t))fg)(event, 0xB0009);
         range = r ? 1 : 0;
-        touch = tt ? 1 : 0;
     }
     if (!range) {             // 抬起：记一个收尾点
         if (nx > 0 || ny > 0) {
