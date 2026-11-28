@@ -121,9 +121,9 @@ static void *gMonRef = NULL;
 
 - (void)finish {
     if (!_recording) return;
+    double dur = [self elapsed];   // 必须在清 _recording 之前算
     _recording = NO;
     NSArray *steps = [_steps copy];
-    double dur = [self elapsed];
     if (!steps.count) { SBLog(@"finish: no steps"); return; }
 
     NSDateFormatter *df = [NSDateFormatter new];

@@ -578,6 +578,15 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     // App 从后台恢复时，旧的监听 socket 可能已被系统作废，重建
     YkBootLog(@"onBecomeActive -> rebuild engine");
     [self ykRebuildEngine];
+    // App 回到前台时把 SpringBoard 悬浮球收起来（原版：只在桌面/别的 App 上浮着）
+    CFMessagePortRef remote = CFMessagePortCreateRemote(kCFAllocatorDefault, CFSTR("com.yk.ball"));
+    if (remote) {
+        NSData *body = [NSJSONSerialization dataWithJSONObject:@{ @"action": @"hide" }
+                                                       options:0 error:NULL];
+        CFMessagePortSendRequest(remote, 1, (__bridge CFDataRef)body,
+                                 0.5, 0.5, kCFRunLoopDefaultMode, NULL);
+        CFRelease(remote);
+    }
 }
 
 - (void)ykRebuildEngine {
