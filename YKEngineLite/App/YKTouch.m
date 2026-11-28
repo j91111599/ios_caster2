@@ -1,3 +1,4 @@
+static int gYkEpoch = 0;
 int gYkClientType = 2;
 #include <stdio.h>
 #import <mach/mach_time.h>
@@ -216,6 +217,16 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
                                              0.0, 0.0, 0.0, press, 0.0, range, touch, 0);
     fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
+    // 原版：父事件设递增 epoch（字段 0xb001b）
+    {
+        void *fsi3 = YkSym("IOHIDEventSetIntegerValue");
+        if (fsi3) {
+            int ep = ++gYkEpoch;
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi3)(hand, 0xb001b, ep);
+            fprintf(stderr, "[touch] epoch=%d\n", ep); fflush(stderr);
+        }
+    }
+
     // 原版：hand 事件必须设置字段 4 = 1（键盘事件同样设置）
     {
         void *fsi = YkSym("IOHIDEventSetIntegerValue");
