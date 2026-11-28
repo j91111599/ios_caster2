@@ -256,7 +256,7 @@ extern NSString *YKEnginePort(void);
     for (NSInteger i = 0; i < 3; i++) {
         NSArray *r = rows[i];
         BOOL on = [r[3] intValue] == 1;
-        BOOL isDevice = [r[3] intValue] < 0;
+        BOOL isDevice = (i == 2);   // 第三行永远是设备行（-1 未连接 / 2 已连接）
         CGFloat y = 72 + i * 80;
         CGFloat h = isDevice ? 72 : 68;
         UIView *row = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, y, CARD_W - INNER_PAD * 2, h)];
