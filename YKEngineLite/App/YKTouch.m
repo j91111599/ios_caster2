@@ -148,14 +148,14 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     if (!fp || !ff) return;
 
     uint64_t ts = mach_absolute_time();
-    uint32_t mask  = 3;                        // Range | Touch
+    uint32_t mask  = 2;                        // kIOHIDDigitizerEventTouch
     int      touch = (phase == 2) ? 0 : 1;
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
     // 父事件：transducerType = 3 (Hand)
     fprintf(stderr, "[touch] step1 before DigitizerEvent\n"); fflush(stderr);
     IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
-                                             1, 0, 0, mask, 0,
+                                             3, 0, 0, mask, 0,
                                              x, y, 0.0, press, 0.0, 1, touch, 0);
     fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
@@ -183,7 +183,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     {
         void *fsv = YkSym("IOHIDEventSetIntegerValue");
         if (fsv) {
-            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsv)(hand, 0x000B0005, 1);
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsv)(hand, 0x000B0019, 1);
             fprintf(stderr, "[touch] set IsDisplayIntegrated\n"); fflush(stderr);
         }
     }
