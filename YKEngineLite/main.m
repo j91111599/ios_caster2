@@ -14,6 +14,7 @@ void YkHIDBoot(void);
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
 #import <spawn.h>
+#import <notify.h>
 #import <sys/wait.h>
 extern char **environ;
 
@@ -547,6 +548,9 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
                     YkTouchSequence(steps, 16);
                     usleep(200000);
                 }
+                // 回放结束：让 SpringBoard 把 App 拉回前台（原版「结束后自动回到本页」）
+                usleep(300000);
+                notify_post("com.yk.openapp");
             });
             return @{ @"value": @{ @"ok": @YES, @"id": rid, @"times": @(times) } };
         }

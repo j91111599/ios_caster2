@@ -8,6 +8,8 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
+#import <notify.h>
 #import <dlfcn.h>
 #import <mach/mach_time.h>
 
@@ -373,6 +375,20 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
 
 @end
 
+
+// 回放结束：把 Lite App 拉回前台（Darwin 通知，daemon 用 notify_post 触发）
+static void YKOpenAppInit(void) {
+    int token = 0;
+    notify_register_dispatch("com.yk.openapp", &token, dispatch_get_main_queue(), ^(int t) {
+        Class ws = NSClassFromString(@"LSApplicationWorkspace");
+        id workspace = ws ? ((id (*)(id, SEL))objc_msgSend)(ws, sel_registerName("defaultWorkspace")) : nil;
+        if (!workspace) { SBLog(@"openapp: no LSApplicationWorkspace"); return; }
+        ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace,
+            sel_registerName("openApplicationWithBundleID:"), @"com.yk.engine.ui");
+        SBLog(@"openapp: requested");
+    });
+}
+
 @implementation YKBallWindow
 // 关键：整窗 750x1334 覆盖桌面时不能吃掉普通点击，否则桌面/其它 App 全部失灵
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
@@ -436,6 +452,7 @@ static void YKBallInit(void) {
         t.name = @"YKBallPort";
         t.stackSize = 512 * 1024;
         [t start];
+        YKOpenAppInit();
         SBLog(@"ball tweak loaded");
     });
 }
