@@ -120,7 +120,7 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     tile.layer.cornerRadius = 12.0;
     [tile addSubview:[self ykIconBox:CGRectMake(12, 10, 32, 32) symbol:s tint:tint glyph:17]];
     UILabel *kl = [self ykLabel:k size:12 bold:NO color:YkSub()];
-    kl.frame = CGRectMake(52, 15, 86, 16); [tile addSubview:kl];
+    kl.frame = CGRectMake(52, 17, 86, 16); [tile addSubview:kl];
     UILabel *vl = [self ykLabel:v size:19 bold:YES color:YkMain()];
     vl.frame = CGRectMake(14, 42, 124, 24);
     vl.adjustsFontSizeToFitWidth = YES; vl.minimumScaleFactor = 0.7;
@@ -320,7 +320,7 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
                           [UIColor colorWithRed:0.94 green:0.93 blue:0.99 alpha:1.0]],
                         @[@"当前状态", @"就绪", @"waveform.path.ecg", YkOrange(),
                           [UIColor colorWithRed:1.0 green:0.95 blue:0.90 alpha:1.0]],
-                        @[@"脚本数量", @"-", @"doc.text.fill", YkMagenta(),
+                        @[@"脚本数量", @"-", @"doc.text", YkMagenta(),
                           [UIColor colorWithRed:0.97 green:0.93 blue:0.99 alpha:1.0]] ];
     for (NSInteger i = 0; i < 4; i++) {
         NSArray *t = tiles[i];
@@ -376,16 +376,16 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     sub.frame = CGRectMake(INNER_PAD, 72, 295, 27);
     [card addSubview:sub];
 
-    NSArray *steps = @[ @[@"1. 打开小球，回到桌面", @"点下方按钮后，App 会退到桌面，只留下\n44x44 红色录制小球。",
+    NSArray *steps = @[ @[@"1. 打开小球，回到桌面", @"点下方按钮后，App 会退到桌面，只留下 44x44 红色录制小球。",
                           @"record.circle", YkRed(),
                           [UIColor colorWithRed:0.99 green:0.93 blue:0.94 alpha:1.0]],
-                        @[@"2. 拖动或点开小球", @"小球可拖动，轻点可展开；操作小球和菜单不\n会写进录制。",
+                        @[@"2. 拖动或点开小球", @"小球可拖动，轻点可展开；操作小球和菜单不会写进录制。",
                           @"hand.point.up.left.fill", YkBlue(),
                           [UIColor colorWithRed:0.92 green:0.95 blue:1.0 alpha:1.0]],
-                        @[@"3. 开始、暂停、继续", @"点「开始」或按音量 + 后先倒计时；录制中可\n暂停，再点继续接着录。",
+                        @[@"3. 开始、暂停、继续", @"点「开始」或按音量 + 后先倒计时；录制中可暂停，再点继续接着录。",
                           @"play.fill", YkGreen(),
                           [UIColor colorWithRed:0.92 green:0.97 blue:0.94 alpha:1.0]],
-                        @[@"4. 完成并命名保存", @"点「完成」或按音量 - 会回到 App 命名；留\n空就按当前时间保存。",
+                        @[@"4. 完成并命名保存", @"点「完成」或按音量 - 会回到 App 命名；留空就按当前时间保存。",
                           @"checkmark.circle.fill", YkOrange(),
                           [UIColor colorWithRed:1.0 green:0.96 blue:0.90 alpha:1.0]] ];
     for (NSInteger i = 0; i < 4; i++) {
@@ -399,7 +399,8 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
         UILabel *t = [self ykLabel:s[0] size:15 bold:YES color:YkMain()];
         t.frame = CGRectMake(56, 8, 227, 19); [row addSubview:t];
         UILabel *d = [self ykLabel:s[1] size:12 bold:NO color:YkSub()];
-        d.frame = CGRectMake(56, 27, 227, 30); d.numberOfLines = 2; [row addSubview:d];
+        d.frame = CGRectMake(56, 27, 227, 32); d.numberOfLines = 2;
+        d.lineBreakMode = NSLineBreakByTruncatingTail; [row addSubview:d];
     }
 
     UIView *sc = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 392, CARD_W - INNER_PAD * 2, 70)];
