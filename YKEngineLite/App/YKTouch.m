@@ -203,21 +203,17 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     uint64_t ts = mach_absolute_time();
     // 原版 eventMaskFromEventInfo：按 phase 返回 0~4
     //   began->3(Range|Touch)  moved->4(Position)  ended->0
-    uint32_t mask;
-    if (gYkUseCaptured && gYkLastRealMask) {
-        mask = gYkLastRealMask;      // 直接用真实事件的 mask
-    } else if (phase == 1)  mask = 3;
-    else if (phase == 3)    mask = 4;
-    else                    mask = 1;   // up: Range，让系统识别为 Ended
+    // 原版实测：父事件 mask 恒为 2 (Touch)，range 恒为 0，坐标恒为 0,0
+    uint32_t mask = 2;
     int      touch = (phase == 2) ? 0 : 1;
-    int      range = 1;   // 固定 1（range=0 会让事件失效）
+    int      range = 0;   // 原版父事件 range 恒为 0
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
     // 父事件：transducerType = 3 (Hand)
     fprintf(stderr, "[touch] step1 before DigitizerEvent\n"); fflush(stderr);
     IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
                                              3, 0, 0, mask, 0,
-                                             x, y, 0.0, press, 0.0, range, touch, 0);
+                                             0.0, 0.0, 0.0, press, 0.0, range, touch, 0);
     fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
     // 原版：hand 事件必须设置字段 4 = 1（键盘事件同样设置）
@@ -312,12 +308,10 @@ static uint64_t YkNow(void) {
 NSDictionary *YkTouchTap(double x, double y) {
     NSDictionary *r = YkPortSend(@{ @"action": @"tap", @"x": @(x), @"y": @(y) });
     if (r) return @{ @"value": r };
-    // 原版序列：began -> moved(位置微移) -> ended
-    YkFingerEvent(1, x,        y,        1.0, YkNow());
-    usleep(20000);
-    YkFingerEvent(3, x + 0.5,  y + 0.5,  1.0, YkNow());
-    usleep(20000);
-    YkFingerEvent(2, x + 0.5,  y + 0.5,  0.0, YkNow());
+    // 原版实测：只有 down / up 两帧
+    YkFingerEvent(1, x, y, 1.0, YkNow());
+    usleep(60000);
+    YkFingerEvent(2, x, y, 0.0, YkNow());
     return @{ @"value": @{ @"action": @"tap", @"x": @(x), @"y": @(y), @"sent": @(YkHIDClient() != NULL) } };
 }
 
