@@ -134,22 +134,8 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UITableView *_table;
 }
 
-- (void)ykServiceToggle:(NSNotification *)n {
-    BOOL on = [n.object boolValue];
-    if (on) {
-        [self startEngineIfNeeded];
-    } else if (_srv) {
-        @try { [_srv stop]; } @catch (__unused NSException *e) { }
-        _srv = nil;
-        YkBootLog(@"service switch OFF -> engine stopped");
-    }
-}
-
 - (void)viewDidLoad {
     [super viewDidLoad];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(ykServiceToggle:)
-                                                 name:@"YKServiceToggle" object:nil];
     self.view.backgroundColor = YkPageBg();
 
     _table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStylePlain];
@@ -238,7 +224,21 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     UILabel *_connPill;
 }
 
+- (void)ykServiceToggle:(NSNotification *)n {
+    BOOL on = [n.object boolValue];
+    if (on) {
+        [self startEngineIfNeeded];
+    } else if (_srv) {
+        @try { [_srv stop]; } @catch (__unused NSException *e) { }
+        _srv = nil;
+        YkBootLog(@"service switch OFF -> engine stopped");
+    }
+}
+
 - (void)viewDidLoad {
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(ykServiceToggle:)
+                                                 name:@"YKServiceToggle" object:nil];
     [super viewDidLoad];
     self.view.backgroundColor = YkPageBg();
     YKMainView *main = [[YKMainView alloc] initWithFrame:self.view.bounds];
