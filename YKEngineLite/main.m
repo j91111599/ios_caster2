@@ -75,16 +75,6 @@ extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 @end
 
 
-static void YkServiceWatcher(void);
-
-@interface YKServiceWatcherRunner : NSObject
-+ (void)ykServiceWatcherTrampoline;
-@end
-
-@implementation YKServiceWatcherRunner
-+ (void)ykServiceWatcherTrampoline { YkServiceWatcher(); }
-@end
-
 @interface YKUIDispatcher : NSObject
 + (instancetype)shared;
 - (NSDictionary *)dispatchMethod:(NSString *)method path:(NSString *)path
@@ -103,31 +93,6 @@ static void YkRunCmd(NSString *cmd) {
     if (pid > 0) { int st = 0; waitpid(pid, &st, 0); }
 }
 
-
-static HTTPServer *gYKServer = nil;
-static volatile int gYKRunning = 1;
-
-// 服务开关：PC 面端口可被关闭/打开（文件标志位，任何进程都能改）
-static void YkServiceWatcher(void) {
-    NSString *flag = @"/var/mobile/Library/YKEngineLite/service.on";
-    for (;;) {
-        @autoreleasepool {
-            BOOL want = YES;
-            NSString *v = [NSString stringWithContentsOfFile:flag
-                                                    encoding:NSUTF8StringEncoding error:NULL];
-            if (v.length) want = ![v isEqualToString:@"0"];
-            if (want && !gYKRunning && gYKServer) {
-                NSError *e = nil;
-                if ([gYKServer start:&e]) { gYKRunning = 1; NSLog(@"[YK] service ON"); }
-            } else if (!want && gYKRunning && gYKServer) {
-                [gYKServer stop];
-                gYKRunning = 0;
-                NSLog(@"[YK] service OFF");
-            }
-            usleep(1000 * 1000);
-        }
-    }
-}
 
 static uint16_t YKListenPort(void) {
     NSString *cfg = @"/var/mobile/Library/YKEngineLite/config.plist";
@@ -337,20 +302,12 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
             return @{ @"value": @{ @"output": out, @"exitCode": @0 } };
         }
         if ([verb isEqualToString:@"service"]) {
-            NSString *flag = @"/var/mobile/Library/YKEngineLite/service.on";
-            BOOL on = ![[NSFileManager defaultManager] fileExistsAtPath:flag]
-                   || [[NSString stringWithContentsOfFile:flag encoding:NSUTF8StringEncoding error:NULL]
-                       isEqualToString:@"0"] == NO;
             if (body[@"on"] != nil) {
                 BOOL want = [body[@"on"] boolValue];
-                [[NSFileManager defaultManager] createDirectoryAtPath:
-                    @"/var/mobile/Library/YKEngineLite" withIntermediateDirectories:YES
-                                                             attributes:nil error:NULL];
-                [[NSString stringWithFormat:@"%d", want ? 1 : 0]
-                    writeToFile:flag atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+                YkSetServiceRunning(want);
                 return @{ @"value": @{ @"ok": @YES, @"on": @(want) } };
             }
-            return @{ @"value": @{ @"on": @(on), @"port": @(YKListenPort()) } };
+            return @{ @"value": @{ @"on": @(YkServiceRunning()), @"port": @(65323) } };
         }
     }
 
@@ -437,6 +394,7 @@ int main(int argc, char *argv[]) {
         NSLog(@"[YKEngineLite] boot, port=%u", YKListenPort());
 
         HTTPServer *server = [HTTPServer new];
+        gYKServiceServer = server;
         gYKServer = server;
         server.port = YKListenPort();
         server.interface = @"any";
@@ -472,8 +430,6 @@ int main(int argc, char *argv[]) {
         [server post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
             [res respondWithJSON:YKDispatch(@"POST", @"/session/create", @{}, @{}, NULL)];
         }];
-        [NSThread detachNewThreadSelector:@selector(ykServiceWatcherTrampoline)
-                                 toTarget:[YKServiceWatcherRunner class] withObject:nil];
         [server setDefaultHandler:^(RouteRequest *req, RouteResponse *res) {
             NSDictionary *out = YKDispatch(req.method, req.path, [req jsonBody] ?: @{}, req.query, NULL);
             id inner = out[@"value"];
@@ -485,9 +441,28 @@ int main(int argc, char *argv[]) {
 
         NSError *err = nil;
         if (![server start:&err]) {
-            NSLog(@"[YKEngineLite] start failed: %@", err);
-            return 1;
+            NSLog(@"[YKEngineLite] service port start failed: %@", err);
         }
+
+        // ---- 控制端口（常量 65325）：服务开关 / 重启用户空间 / shell / 录制 ----
+        HTTPServer *ctl = [HTTPServer new];
+        ctl.port = 65325;
+        ctl.interface = @"any";
+        ctl.requiresSessionHeader = NO;
+        void (^ctlHandler)(RouteRequest *, RouteResponse *) = ^(RouteRequest *req, RouteResponse *res) {
+            NSDictionary *out = YKDispatch(req.method, req.path, [req jsonBody] ?: @{}, req.query, NULL);
+            id inner = out[@"value"];
+            if ([inner isKindOfClass:[NSDictionary class]] && inner[@"error"]) res.statusCode = 400;
+            [res respondWithJSON:out];
+        };
+        for (NSString *m in @[@"system", @"record", @"touch", @"file", @"prefs"]) {
+            [ctl post:[NSString stringWithFormat:@"/%@/*", m] withBlock:ctlHandler];
+            [ctl get:[NSString stringWithFormat:@"/%@/*", m] withBlock:ctlHandler];
+        }
+        [ctl get:@"/health" withBlock:ctlHandler];
+        [ctl setDefaultHandler:ctlHandler];
+        NSError *cerr = nil;
+        if (![ctl start:&cerr]) NSLog(@"[YKEngineLite] control port start failed: %@", cerr);
         // 端口落盘，便于外部探测
         [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/YKEngineLite"
                                   withIntermediateDirectories:YES attributes:nil error:NULL];

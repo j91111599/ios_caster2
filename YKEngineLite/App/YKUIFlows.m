@@ -59,7 +59,7 @@ void YKAlertRestart(UIViewController *host, void (^onConfirm)(void)) {
 #pragma mark - 系统动作
 
 BOOL YKRequestRestartUserspace(void) {
-    NSString *url = @"http://127.0.0.1:65323/system/respring";
+    NSString *url = @"http://127.0.0.1:65325/system/respring";
     NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
     r.HTTPMethod = @"POST";
     r.timeoutInterval = 2.0;

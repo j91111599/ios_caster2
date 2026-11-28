@@ -649,7 +649,7 @@ extern NSString *YKEnginePort(void);
         [[NSString stringWithFormat:@"%d", sw.on ? 1 : 0]
             writeToFile:flag atomically:YES encoding:NSUTF8StringEncoding error:NULL];
         NSMutableURLRequest *rq = [NSMutableURLRequest requestWithURL:
-            [NSURL URLWithString:@"http://127.0.0.1:65323/system/service"]];
+            [NSURL URLWithString:@"http://127.0.0.1:65325/system/service"]];
         rq.HTTPMethod = @"POST";
         rq.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{ @"on": @(sw.on) }
                                                      options:0 error:NULL];
@@ -720,7 +720,7 @@ extern NSString *YKEnginePort(void);
     for (UIView *v in _recordListBox.subviews) [v removeFromSuperview];
 
     NSArray *recs = nil;
-    NSURL *u = [NSURL URLWithString:@"http://127.0.0.1:65323/record/list"];
+    NSURL *u = [NSURL URLWithString:@"http://127.0.0.1:65325/record/list"];
     NSData *d = [NSData dataWithContentsOfURL:u];
     if (d) {
         NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL];
@@ -798,7 +798,7 @@ extern NSString *YKEnginePort(void);
         NSDictionary *body = @{ @"id": rid ?: @"" , @"times": @(times), @"delayMs": @(1800) };
         NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
         NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
-            [NSURL URLWithString:@"http://127.0.0.1:65323/record/play"]];
+            [NSURL URLWithString:@"http://127.0.0.1:65325/record/play"]];
         r.HTTPMethod = @"POST"; r.HTTPBody = d;
         [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
         [[[NSURLSession sharedSession] dataTaskWithRequest:r
@@ -816,7 +816,7 @@ extern NSString *YKEnginePort(void);
     NSDictionary *body = @{ @"id": rid };
     NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
     NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
-        [NSURL URLWithString:@"http://127.0.0.1:65323/record/remove"]];
+        [NSURL URLWithString:@"http://127.0.0.1:65325/record/remove"]];
     r.HTTPMethod = @"POST"; r.HTTPBody = d;
     [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [[[NSURLSession sharedSession] dataTaskWithRequest:r
@@ -887,7 +887,7 @@ extern NSString *YKEnginePort(void);
                                 @"steps": steps, @"duration": @(dur) };
         NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
         NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
-            [NSURL URLWithString:@"http://127.0.0.1:65323/record/save"]];
+            [NSURL URLWithString:@"http://127.0.0.1:65325/record/save"]];
         r.HTTPMethod = @"POST"; r.HTTPBody = d;
         [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
         [[[NSURLSession sharedSession] dataTaskWithRequest:r
