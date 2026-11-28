@@ -225,6 +225,10 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
         if (fsi3) {
             int ep = ++gYkEpoch;
             ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi3)(hand, 0xb001b, ep);
+            // 原版校验要求：父事件 0xb0004 (DigitizerType) 必须 == 3 (Hand)
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi3)(hand, 0xb0004, 3);
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi3)(hand, 0xb0005, 0);  // index
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi3)(hand, 0xb0006, 0);  // identity
             fprintf(stderr, "[touch] epoch=%d\n", ep); fflush(stderr);
         }
     }
