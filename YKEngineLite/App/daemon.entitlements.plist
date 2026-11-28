@@ -40,5 +40,15 @@
 	<key>com.apple.private.skip-library-validation</key>
 	<true/>
 	<key>com.apple.private.security.no-container</key>
-	<true/></dict>
+	<true/>
+	<key>com.apple.backboard.client</key>
+	<true/>
+	<key>com.apple.security.iokit-user-client-class</key>
+	<array>
+		<string>AppleSPUHIDDeviceUserClient</string>
+		<string>AppleSPUHIDDriverUserClient</string>
+		<string>IOHIDEventServiceFastPathUserClient</string>
+		<string>IOHIDLibUserClient</string>
+	</array>
+</dict>
 </plist>

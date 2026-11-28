@@ -107,6 +107,13 @@ extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
 extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d, NSInteger steps);
 extern NSDictionary *YkTouchMulti(int fingers, double x1, double y1, double x2, double y2, double d);
+extern NSDictionary *YkTouchHome(int count, double hold);
+extern NSDictionary *YkTouchDoubleTap(double x, double y, double gap);
+extern NSDictionary *YkTouchPinch(double x1, double y1, double ex1, double ey1,
+                                  double x2, double y2, double ex2, double ey2,
+                                  double durationSec, NSInteger steps);
+extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
+extern uint64_t gYkSenderID;
 extern NSArray *YkMatchTemplateAll(UIImage *scene, UIImage *tpl, double threshold, NSInteger maxResults);
 extern NSDictionary *YkMatchTemplateScale(UIImage *scene, UIImage *tpl, double threshold, NSArray *scales, double *usedScale);
 
@@ -312,6 +319,8 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
     if ([head isEqualToString:@"touch"]) {
         NSString *verb = seg.count > 1 ? seg[1] : @"";
         double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        // 未传 sender 时沿用持久化 senderID（清 0 会导致事件不被派发到窗口）
+        if (body[@"sender"]) gYkSenderID = [body[@"sender"] unsignedLongLongValue];
         if ([verb isEqualToString:@"ping"]) {
             extern NSDictionary *YkTouchPing(void);
             return YkTouchPing();
@@ -329,7 +338,36 @@ NSDictionary *YKAppDispatchPath(NSString *method, NSString *path,
             return YkTouchSwipe(x, y, x2, y2, [body[@"duration"] doubleValue] ?: 0.3,
                                 [body[@"steps"] integerValue] ?: 12);
         }
-        if ([verb isEqualToString:@"multi"] || [verb isEqualToString:@"pinch"])
+        if ([verb isEqualToString:@"doubleTap"])
+            return YkTouchDoubleTap(x, y, [body[@"gap"] doubleValue]);
+        if ([verb isEqualToString:@"home"])
+            return YkTouchHome(body[@"count"] ? [body[@"count"] intValue] : 1,
+                               [body[@"hold"] doubleValue]);
+        if ([verb isEqualToString:@"pinch"]) {
+            NSArray *a = body[@"startPoints"], *b = body[@"endPoints"];
+            if (a.count == 2 && b.count == 2)
+                return YkTouchPinch([a[0][@"x"] doubleValue], [a[0][@"y"] doubleValue],
+                                    [b[0][@"x"] doubleValue], [b[0][@"y"] doubleValue],
+                                    [a[1][@"x"] doubleValue], [a[1][@"y"] doubleValue],
+                                    [b[1][@"x"] doubleValue], [b[1][@"y"] doubleValue],
+                                    [body[@"duration"] doubleValue] ?: 0.35,
+                                    [body[@"steps"] integerValue] ?: 12);
+            if (body[@"ex1"])
+                return YkTouchPinch(x, y,
+                                    [body[@"ex1"] doubleValue], [body[@"ey1"] doubleValue],
+                                    [body[@"x2"] doubleValue], [body[@"y2"] doubleValue],
+                                    [body[@"ex2"] doubleValue], [body[@"ey2"] doubleValue],
+                                    [body[@"duration"] doubleValue] ?: 0.35,
+                                    [body[@"steps"] integerValue] ?: 12);
+            return YKErr(@"bad_request", @"pinch 需要 startPoints/endPoints 各两点");
+        }
+        if ([verb isEqualToString:@"sequence"])
+            return YkTouchSequence(body[@"points"] ?: body[@"events"],
+                                   [body[@"delayMs"] doubleValue] ?: 20);
+        if ([verb isEqualToString:@"showTouches"])
+            return @{ @"value": @{ @"ok": @YES, @"supported": @NO,
+                                   @"note": @"Lite 不含触摸可视化层（原版 YKPointRadius）" } };
+        if ([verb isEqualToString:@"multi"])
             return YkTouchMulti((int)([body[@"fingers"] integerValue] ?: 2),
                                 x, y,
                                 [body[@"x2"] doubleValue], [body[@"y2"] doubleValue],

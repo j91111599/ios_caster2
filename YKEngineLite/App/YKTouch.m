@@ -2,6 +2,7 @@ static int gYkEpoch = 0;
 static void YkTryRecordEvent(void *event);
 int gYkClientType = 2;
 #include <stdio.h>
+#include <stdlib.h>
 #import <mach/mach_time.h>
 //  YKTouch.m — 触控注入（IOHIDEventSystemClient，私有符号 dlsym）
 //
@@ -31,8 +32,35 @@ static NSDictionary *YkPortSend(NSDictionary *req) {
     return [out isKindOfClass:[NSDictionary class]] ? out : nil;
 }
 
-uint64_t gYkSenderID = 0;
+// senderID 必须是真实触摸屏服务的 registry ID，否则 SpringBoard 只把事件
+// 收进 HID 系统却不会派发给任何窗口（原版所有注入点都硬编码这一个值）。
+#define YK_SENDER_DEFAULT 0x8000000817319371ULL
+#define YK_SENDER_FILE    @"/var/mobile/Library/YKEngineLite/sender.txt"
+
+uint64_t gYkSenderID = 0;          // 0/1 = 自动解析；>1 = 指定值
+static uint64_t gYkSenderFile = 0; // 持久化缓存
 static int gYkUseCaptured = 0;
+
+static uint64_t YkSenderLoad(void) {
+    if (gYkSenderFile) return gYkSenderFile;
+    NSString *s = [NSString stringWithContentsOfFile:YK_SENDER_FILE
+                                            encoding:NSUTF8StringEncoding error:NULL];
+    s = [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (s.length) {
+        unsigned long long v = strtoull(s.UTF8String, NULL, 0);
+        if (v > 1) gYkSenderFile = v;
+    }
+    return gYkSenderFile;
+}
+
+static void YkSenderSave(uint64_t v) {
+    if (v <= 1 || v == gYkSenderFile) return;
+    gYkSenderFile = v;
+    [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/YKEngineLite"
+                              withIntermediateDirectories:YES attributes:nil error:NULL];
+    [[NSString stringWithFormat:@"%llu", (unsigned long long)v]
+        writeToFile:YK_SENDER_FILE atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+}
 
 
 
@@ -137,6 +165,8 @@ static IOHIDEventSystemClientRef YkHIDClient(void) {
 
 // 枚举 HID 服务，按 usage 找出触摸屏，返回其 registry ID（= senderID）
 static uint64_t YkFindTouchSenderID(void) {
+    static uint64_t cached = 0;
+    if (cached) return cached;
     void *fc = YkSym("IOHIDEventSystemClientCopyServices");
     void *fr = YkSym("IOHIDServiceClientGetRegistryID");
     void *fp = YkSym("IOHIDServiceClientCopyProperty");
@@ -173,7 +203,19 @@ static uint64_t YkFindTouchSenderID(void) {
     }
     CFRelease(svcs);
     fprintf(stderr, "[touch] picked sender=%llu\n", (unsigned long long)found); fflush(stderr);
+    cached = found;
     return found;
+}
+
+// senderID 解析优先级：请求显式值 > 持久化值 > 服务枚举 > 原版硬编码常量
+static uint64_t YkResolveSender(void) {
+    uint64_t v = gYkSenderID;
+    if (v == 1) v = YkFindTouchSenderID();
+    if (v <= 1) v = YkSenderLoad();
+    if (v <= 1) v = YkFindTouchSenderID();
+    if (v <= 1) v = YK_SENDER_DEFAULT;
+    YkSenderSave(v);
+    return v;
 }
 
 static void YkSendEvent(IOHIDEventRef ev) {
@@ -297,15 +339,10 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     // 原版会补 timestamp + senderID（SpringBoard 靠 senderID 判断事件来源）
     void *fst = YkSym("IOHIDEventSetTimeStamp");
     if (fst) ((void (*)(IOHIDEventRef, uint64_t))fst)(hand, mach_absolute_time());
-    if (gYkSenderID == 1) gYkSenderID = YkFindTouchSenderID();   // 1 = 自动探测
-    if (gYkSenderID == 2) {          // 2 = 使用捕获的真实 senderID
-        if (!gYkLastRealSender) gYkLastRealSender = YkFindTouchSenderID();
-        gYkSenderID = gYkLastRealSender;
-        gYkUseCaptured = 1;
-    }
-    if (gYkSenderID && gYkSenderID != 1) {
-        void *fsi = YkSym("IOHIDEventSetSenderID");
-        if (fsi) ((void (*)(IOHIDEventRef, uint64_t))fsi)(hand, gYkSenderID);
+    uint64_t sid = YkResolveSender();
+    {
+        void *fss = YkSym("IOHIDEventSetSenderID");
+        if (fss) ((void (*)(IOHIDEventRef, uint64_t))fss)(hand, sid);
     }
     // 标记为显示集成设备（坐标才映射到屏幕）——原版同样设置
     {
@@ -317,7 +354,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     }
 
     fprintf(stderr, "[touch] step5b dispatch client=%p sender=%llu\n",
-            (void *)YkHIDClient(), (unsigned long long)gYkSenderID); fflush(stderr);
+            (void *)YkHIDClient(), (unsigned long long)sid); fflush(stderr);
     if ([NSThread isMainThread]) {
         YkSendEvent(hand);
     } else {
@@ -409,6 +446,109 @@ NSDictionary *YkTouchPing(void) {
     NSDictionary *r = YkPortSend(@{ @"action": @"ping" });
     if (r) return @{ @"value": r };
     return @{ @"value": @{ @"ok": @NO, @"reason": @"socket 不可用（tweak 未加载）" } };
+}
+
+// ---- Home 键：原版 r6TWsk92…/menuLongPress 的等价实现 ----
+// IOHIDEventCreateKeyboardEvent(alloc, ts, page=0x0C, usage=0x40, isDown, options)
+// page 0x0C / usage 0x40 = Consumer "Menu"，iOS 上等同 Home 键。
+static void YkMenuEvent(int down) {
+    void *fk = YkSym("IOHIDEventCreateKeyboardEvent");
+    if (!fk) { fprintf(stderr, "[touch] no CreateKeyboardEvent\n"); return; }
+    typedef IOHIDEventRef (*YkKeyFn)(CFAllocatorRef, uint64_t, uint32_t, uint32_t, int, uint32_t);
+    IOHIDEventRef ev = ((YkKeyFn)fk)(kCFAllocatorDefault, mach_absolute_time(),
+                                     0x0C, 0x40, down, 0);
+    if (!ev) return;
+    void *fss = YkSym("IOHIDEventSetSenderID");
+    if (fss) ((void (*)(IOHIDEventRef, uint64_t))fss)(ev, YkResolveSender());
+    YkSendEvent(ev);
+    CFRelease(ev);
+}
+
+NSDictionary *YkTouchHome(int count, double hold) {
+    NSDictionary *r = YkPortSend(@{ @"action": @"home", @"count": @(count),
+                                     @"hold": @(hold) });
+    if (r) return @{ @"value": r };
+    if (count < 1) count = 1;
+    if (hold <= 0) hold = 0.05;
+    for (int i = 0; i < count; i++) {
+        YkMenuEvent(1);
+        usleep((useconds_t)(hold * 1000000));
+        YkMenuEvent(0);
+        if (i + 1 < count) usleep(150000);   // 原版双击间隔 150 ms
+    }
+    return @{ @"value": @{ @"action": @"home", @"count": @(count), @"ok": @YES } };
+}
+
+NSDictionary *YkTouchDoubleTap(double x, double y, double gapSec) {
+    if (gapSec <= 0) gapSec = 0.08;
+    YkFingerEvent(1, x, y, 1.0, YkNow());
+    usleep(40000);
+    YkFingerEvent(2, x, y, 0.0, YkNow());
+    usleep((useconds_t)(gapSec * 1000000));
+    YkFingerEvent(1, x, y, 1.0, YkNow());
+    usleep(40000);
+    YkFingerEvent(2, x, y, 0.0, YkNow());
+    return @{ @"value": @{ @"action": @"doubleTap", @"x": @(x), @"y": @(y),
+                           @"gap": @(gapSec), @"ok": @YES } };
+}
+
+// 双指线性捏合：index 1 从 p1→q1，index 2 从 p2→q2
+NSDictionary *YkTouchPinch(double x1, double y1, double ex1, double ey1,
+                           double x2, double y2, double ex2, double ey2,
+                           double durationSec, NSInteger steps)
+{
+    if (steps <= 0) steps = 12;
+    if (durationSec <= 0) durationSec = 0.35;
+    useconds_t gap = (useconds_t)(durationSec * 1000000 / steps);
+
+    // 两指按下（同一帧内两个子事件）
+    YkInject(1, x1, y1, 1, 1.0);
+    YkInject(1, x2, y2, 2, 1.0);
+    usleep(gap);
+    for (NSInteger i = 1; i <= steps; i++) {
+        double t = (double)i / steps;
+        YkInject(3, x1 + (ex1 - x1) * t, y1 + (ey1 - y1) * t, 1, 1.0);
+        YkInject(3, x2 + (ex2 - x2) * t, y2 + (ey2 - y2) * t, 2, 1.0);
+        usleep(gap);
+    }
+    YkInject(2, ex1, ey1, 1, 0.0);
+    YkInject(2, ex2, ey2, 2, 0.0);
+    return @{ @"value": @{ @"action": @"pinch", @"steps": @(steps), @"ok": @YES } };
+}
+
+// 通用序列：points = [{x,y,touch(0/1),delayMs,finger}]
+NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs) {
+    if (![points isKindOfClass:[NSArray class]] || points.count == 0)
+        return @{ @"value": @{ @"error": @"empty_sequence" } };
+    if (defaultGapMs <= 0) defaultGapMs = 20;
+
+    int fingerDown[4] = {0, 0, 0, 0};
+    NSInteger sent = 0;
+    for (id raw in points) {
+        if (![raw isKindOfClass:[NSDictionary class]]) continue;
+        NSDictionary *p = raw;
+        double x = [p[@"x"] doubleValue], y = [p[@"y"] doubleValue];
+        int finger = (int)([p[@"finger"] integerValue]);
+        if (finger < 1 || finger > 3) finger = 1;
+        int touch = p[@"touch"] ? [p[@"touch"] intValue] : 1;
+        int phase;
+        if (p[@"type"]) {
+            NSString *t = [p[@"type"] description];
+            phase = [t isEqualToString:@"down"] ? 1 : ([t isEqualToString:@"up"] ? 2 : 3);
+        } else if (touch) {
+            phase = fingerDown[finger] ? 3 : 1;
+        } else {
+            phase = 2;
+        }
+        fingerDown[finger] = touch;
+        YkInject(phase, x, y, (uint32_t)finger, touch ? 1.0 : 0.0);
+        sent++;
+        double d = p[@"delayMs"] ? [p[@"delayMs"] doubleValue] : defaultGapMs;
+        if (d > 0) usleep((useconds_t)(d * 1000));
+    }
+    for (int f = 1; f <= 3; f++)
+        if (fingerDown[f]) YkInject(2, 0, 0, (uint32_t)f, 0.0);
+    return @{ @"value": @{ @"action": @"sequence", @"frames": @(sent), @"ok": @YES } };
 }
 
 
@@ -525,7 +665,9 @@ static void YkTryRecordEvent(void *event) {
 void YkHIDBoot(void) {
     // 原版 YKService 在 init 里就创建 client，而不是懒加载
     IOHIDEventSystemClientRef c = YkHIDClient();
-    fprintf(stderr, "[touch] BOOT client=%p type=%d\n", (void *)c, gYkClientType);
+    uint64_t sid = YkResolveSender();       // 启动即定下 senderID 并落盘
+    fprintf(stderr, "[touch] BOOT client=%p type=%d sender=%llu\n",
+            (void *)c, gYkClientType, (unsigned long long)sid);
     fflush(stderr);
 }
 

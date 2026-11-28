@@ -24,6 +24,12 @@ extern NSDictionary *YkReplayAtRaw(double x, double y, int raw);
 extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
 extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d);
+extern NSDictionary *YkTouchHome(int count, double hold);
+extern NSDictionary *YkTouchDoubleTap(double x, double y, double gap);
+extern NSDictionary *YkTouchPinch(double x1, double y1, double ex1, double ey1,
+                                  double x2, double y2, double ex2, double ey2,
+                                  double durationSec, NSInteger steps);
+extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 
 @interface YKFileModule : NSObject
 + (NSDictionary *)exists:(NSString *)p;
@@ -104,14 +110,44 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
             int nt = [body[@"clientType"] intValue];
             gYkClientType = nt;
         }
+        // sender 显式传入才覆盖；未传 = 沿用持久化/自动解析的 senderID
+        // （清空 senderID 会让 SpringBoard 收到事件却不派发给任何窗口）
         if (body[@"sender"]) gYkSenderID = [body[@"sender"] unsignedLongLongValue];
-        else gYkSenderID = 0;
         if ([v isEqualToString:@"tap"])       return YkTouchTap(x, y);
         if ([v isEqualToString:@"longPress"])  return YkTouchLongPress(x, y, [body[@"duration"] doubleValue]);
         if ([v isEqualToString:@"swipe"])      return YkTouchSwipe(x, y,
                                                    [body[@"toX"] doubleValue],
                                                    [body[@"toY"] doubleValue],
                                                    [body[@"duration"] doubleValue]);
+        if ([v isEqualToString:@"doubleTap"])  return YkTouchDoubleTap(x, y, [body[@"gap"] doubleValue]);
+        if ([v isEqualToString:@"home"])        return YkTouchHome(body[@"count"] ? [body[@"count"] intValue] : 1,
+                                                                   [body[@"hold"] doubleValue]);
+        if ([v isEqualToString:@"pinch"]) {
+            NSArray *a = body[@"startPoints"], *b = body[@"endPoints"];
+            if (a.count == 2 && b.count == 2)
+                return YkTouchPinch([a[0][@"x"] doubleValue], [a[0][@"y"] doubleValue],
+                                    [b[0][@"x"] doubleValue], [b[0][@"y"] doubleValue],
+                                    [a[1][@"x"] doubleValue], [a[1][@"y"] doubleValue],
+                                    [b[1][@"x"] doubleValue], [b[1][@"y"] doubleValue],
+                                    [body[@"duration"] doubleValue],
+                                    [body[@"steps"] integerValue]);
+            // 兼容：ex1/ey1/ex2/ey2 平铺写法
+            if (body[@"ex1"])
+                return YkTouchPinch(x, y,
+                                    [body[@"ex1"] doubleValue], [body[@"ey1"] doubleValue],
+                                    [body[@"x2"] doubleValue], [body[@"y2"] doubleValue],
+                                    [body[@"ex2"] doubleValue], [body[@"ey2"] doubleValue],
+                                    [body[@"duration"] doubleValue],
+                                    [body[@"steps"] integerValue]);
+            return @{ @"value.error": @"bad_request",
+                      @"value.message": @"pinch 需要 startPoints/endPoints 各两点" };
+        }
+        if ([v isEqualToString:@"sequence"])
+            return YkTouchSequence(body[@"points"] ?: body[@"events"],
+                                   [body[@"delayMs"] doubleValue]);
+        if ([v isEqualToString:@"showTouches"])
+            return @{ @"value": @{ @"ok": @YES, @"supported": @NO,
+                                   @"note": @"Lite 不含触摸可视化层（原版 YKPointRadius）" } };
         if ([v isEqualToString:@"ping"])       return @{ @"value": @{ @"ok": @YES, @"pid": @(getpid()) } };
         if ([v isEqualToString:@"loopback"])   return YkLoopbackTest(x, y);
         if ([v isEqualToString:@"capture"])    return YkTouchCaptureInfo();

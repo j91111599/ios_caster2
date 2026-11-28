@@ -18,5 +18,34 @@
 	<true/>
 	<key>keychain-access-groups</key>
 	<array><string>com.yk.engine.ui</string></array>
+	<!-- 触控注入：与原版 YKEngine 对齐的 HID 权限子集 -->
+	<key>com.apple.backboard.client</key>
+	<true/>
+	<key>com.apple.private.hid.client.event-dispatch</key>
+	<true/>
+	<key>com.apple.private.hid.client.event-monitor</key>
+	<true/>
+	<key>com.apple.private.hid.client.event-filter</key>
+	<true/>
+	<key>com.apple.private.hid.manager.client</key>
+	<true/>
+	<key>com.apple.hid.manager.user-access</key>
+	<true/>
+	<key>com.apple.hid.multitouch.user-access</key>
+	<true/>
+	<key>com.apple.hid.system.user-access-service</key>
+	<true/>
+	<key>com.apple.security.exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.iohid.server</string>
+		<string>com.apple.backboard.hid-services</string>
+	</array>
+	<key>com.apple.security.iokit-user-client-class</key>
+	<array>
+		<string>AppleSPUHIDDeviceUserClient</string>
+		<string>AppleSPUHIDDriverUserClient</string>
+		<string>IOHIDEventServiceFastPathUserClient</string>
+		<string>IOHIDLibUserClient</string>
+	</array>
 </dict>
 </plist>
