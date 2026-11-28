@@ -618,8 +618,10 @@ static UIImageView *YkIcon(NSString *sym, CGFloat size, UIColor *tint) {
     // 调试口：把一段二维码内容喂给「扫码连接」的处理逻辑（相机不可用时验证用）
     [_srv post:@"/debug/connect" withBlock:^(RouteRequest *req, RouteResponse *res) {
         NSString *code = req.jsonBody[@"code"] ?: @"";
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"YKDebugConnect"
-                                                            object:code];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"YKDebugConnect"
+                                                                object:code];
+        });
         [res respondWithJSON:@{ @"value": @{ @"ok": @YES, @"code": code } }];
     }];
     [_srv post:@"/session/create" withBlock:^(RouteRequest *req, RouteResponse *res) {
