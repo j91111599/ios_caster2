@@ -208,7 +208,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
         mask = gYkLastRealMask;      // 直接用真实事件的 mask
     } else if (phase == 1)  mask = 3;
     else if (phase == 3)    mask = 4;
-    else                    mask = 0;
+    else                    mask = 1;   // up: Range，让系统识别为 Ended
     int      touch = (phase == 2) ? 0 : 1;
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
