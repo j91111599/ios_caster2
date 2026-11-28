@@ -362,6 +362,70 @@ static void YkFingerEvent(int phase, double x, double y, double pressure, uint64
     YkInject(phase, x, y, 1, pressure);
 }
 
+// ---- 多指单帧：一个父事件挂 N 个手指子事件，一次 dispatch ----
+// iOS 的手指跟踪按「同一帧里的多个子事件」配对，分多次派发会被当成两次单指。
+static void YkInjectFrame(int phase, const double *xs, const double *ys, int n) {
+    void *fp = YkSym("IOHIDEventCreateDigitizerEvent");
+    void *ff = YkSym("IOHIDEventCreateDigitizerFingerEvent");
+    void *fa = YkSym("IOHIDEventAppendEvent");
+    void *fsi = YkSym("IOHIDEventSetIntegerValue");
+    if (!fp || !ff || !fa || n <= 0) return;
+
+    uint64_t ts = mach_absolute_time();
+    int touch = (phase == 2) ? 0 : 1;
+    double press = (phase == 2) ? 0.0 : 1.0;
+
+    IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
+                                             3, 0, 0, 2, 0,
+                                             0.0, 0.0, 0.0, press, 0.0, 0, touch, 0);
+    if (!hand) return;
+    if (fsi) {
+        int ep = ++gYkEpoch;
+        ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(hand, 0xb001b, ep);
+        ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(hand, 0xb0004, 3);
+        ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(hand, 4, 1);
+    }
+
+    CGSize scr = [UIScreen mainScreen].bounds.size;
+    double sc = [UIScreen mainScreen].scale;
+    double sw = scr.width * sc, sh = scr.height * sc;
+    if (sw <= 0) sw = 750; if (sh <= 0) sh = 1334;
+
+    for (int i = 0; i < n; i++) {
+        double nx = xs[i] / sw, ny = ys[i] / sh;
+        if (nx > 1.0) nx = 1.0; if (ny > 1.0) ny = 1.0;
+        uint32_t idx = 2u + (uint32_t)i;
+        IOHIDEventRef f = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
+                                           idx, idx, 3, 0,
+                                           nx, ny, 0.0, 0.0, 0.0,
+                                           (phase == 2) ? 0 : 1, touch, 0);
+        if (!f) continue;
+        void *sf = YkSym("IOHIDEventSetFloatValue");
+        if (sf) {
+            void (*SetF)(IOHIDEventRef, uint32_t, double) =
+                (void (*)(IOHIDEventRef, uint32_t, double))sf;
+            SetF(f, 0xb0011, 1.0); SetF(f, 0xb0012, 1.0); SetF(f, 0xb0013, 0.0);
+            SetF(f, 0xb0014, 5.0); SetF(f, 0xb0015, 5.0); SetF(f, 0xb001a, 1.0);
+        }
+        ((YkAppendFn)fa)(hand, f, 0);
+        if (fsi) {
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(f, 0xB0008, (phase == 2) ? 0 : 1);
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(f, 0xB0009, touch);
+        }
+        CFRelease(f);
+    }
+
+    if (fsi) ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(hand, 0x000B0019, 1);
+    void *fss = YkSym("IOHIDEventSetSenderID");
+    if (fss) ((void (*)(IOHIDEventRef, uint64_t))fss)(hand, YkResolveSender());
+    if ([NSThread isMainThread]) {
+        YkSendEvent(hand);
+        CFRelease(hand);
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{ YkSendEvent(hand); CFRelease(hand); });
+    }
+}
+
 static void YkTwoFingerEvent(int phase, double x1, double y1, double x2, double y2, uint64_t ts) {
     (void)ts;
     YkInject(phase, x1, y1, 1, 1.0);
@@ -430,13 +494,14 @@ NSDictionary *YkTouchMulti(int fingers, double x1, double y1, double x2, double 
     NSDictionary *rs = YkPortSend(@{ @"action": @"multi", @"x": @(x1), @"y": @(y1),
                                        @"x2": @(x2), @"y2": @(y2), @"duration": @(durationSec) });
     if (rs) return @{ @"value": rs };
-    YkTwoFingerEvent(1, x1, y1, x2, y2, YkNow());
+    double xs[2] = { x1, x2 }, ys[2] = { y1, y2 };
     NSInteger frames = (NSInteger)((durationSec > 0 ? durationSec : 0.3) * 1000 / 30);
+    YkInjectFrame(1, xs, ys, 2);
     for (NSInteger i = 0; i < frames; i++) {
         usleep(30000);
-        YkTwoFingerEvent(3, x1, y1, x2, y2, YkNow());
+        YkInjectFrame(3, xs, ys, 2);
     }
-    YkTwoFingerEvent(2, x1, y1, x2, y2, YkNow());
+    YkInjectFrame(2, xs, ys, 2);
     return @{ @"value": @{ @"action": @"multi", @"fingers": @(fingers),
                            @"points": @[ @[ @(x1), @(y1) ], @[ @(x2), @(y2) ] ],
                            @"sent": @(YkHIDClient() != NULL) } };
@@ -501,18 +566,16 @@ NSDictionary *YkTouchPinch(double x1, double y1, double ex1, double ey1,
     if (durationSec <= 0) durationSec = 0.35;
     useconds_t gap = (useconds_t)(durationSec * 1000000 / steps);
 
-    // 两指按下（同一帧内两个子事件）
-    YkInject(1, x1, y1, 1, 1.0);
-    YkInject(1, x2, y2, 2, 1.0);
-    usleep(gap);
-    for (NSInteger i = 1; i <= steps; i++) {
-        double t = (double)i / steps;
-        YkInject(3, x1 + (ex1 - x1) * t, y1 + (ey1 - y1) * t, 1, 1.0);
-        YkInject(3, x2 + (ex2 - x2) * t, y2 + (ey2 - y2) * t, 2, 1.0);
+    double xs[2], ys[2];
+    for (NSInteger i = 0; i < steps; i++) {
+        double t = (double)i / (double)steps;
+        xs[0] = x1 + (ex1 - x1) * t;  ys[0] = y1 + (ey1 - y1) * t;
+        xs[1] = x2 + (ex2 - x2) * t;  ys[1] = y2 + (ey2 - y2) * t;
+        YkInjectFrame(i == 0 ? 1 : 3, xs, ys, 2);   // 同一个父事件里两个手指
         usleep(gap);
     }
-    YkInject(2, ex1, ey1, 1, 0.0);
-    YkInject(2, ex2, ey2, 2, 0.0);
+    xs[0] = ex1; ys[0] = ey1; xs[1] = ex2; ys[1] = ey2;
+    YkInjectFrame(2, xs, ys, 2);
     return @{ @"value": @{ @"action": @"pinch", @"steps": @(steps), @"ok": @YES } };
 }
 
