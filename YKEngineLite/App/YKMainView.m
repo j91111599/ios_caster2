@@ -649,6 +649,9 @@ extern NSString *YKEnginePort(void);
         [_navRightBtn setTitle:@"＋ 添加脚本" forState:UIControlStateNormal];
     } else {
         title.text = @"录制中心";
+        // 切到录制页时刷新一次（小球在后台保存的记录要能立刻看到）
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ [self ykRefreshRecordList]; });
     }
 }
 

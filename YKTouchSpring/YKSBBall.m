@@ -156,9 +156,23 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
 
     void *ff = SBSym("IOHIDEventGetFloatValue");
     void *fg = SBSym("IOHIDEventGetIntegerValue");
+    void *fch = SBSym("IOHIDEventGetChildren");
     if (!ff) return;
-    double nx = ((double (*)(void *, uint32_t))ff)(event, 0xB0000);
-    double ny = ((double (*)(void *, uint32_t))ff)(event, 0xB0001);
+
+    // 手指坐标在子事件里：父事件只有 range/touch 标志
+    void *finger = event;
+    if (fch) {
+        CFArrayRef kids = ((CFArrayRef (*)(void *))fch)(event);
+        if (kids && CFArrayGetCount(kids) > 0) {
+            finger = (void *)CFArrayGetValueAtIndex(kids, 0);
+        }
+    }
+    double nx = ((double (*)(void *, uint32_t))ff)(finger, 0xB0000);
+    double ny = ((double (*)(void *, uint32_t))ff)(finger, 0xB0001);
+    if (nx == 0 && ny == 0) {
+        nx = ((double (*)(void *, uint32_t))ff)(event, 0xB0000);
+        ny = ((double (*)(void *, uint32_t))ff)(event, 0xB0001);
+    }
 
     int touch = 1, range = 1;
     if (fg) {
