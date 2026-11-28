@@ -10,6 +10,7 @@
 void YkHIDBoot(void);
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <mach-o/dyld.h>
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
 #import <spawn.h>
@@ -88,6 +89,39 @@ extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 static HTTPServer *gYKServiceServer = nil;
 static volatile int gYKServiceRunning = 1;
 
+
+// dpkg 装出来的 App，SpringBoard 不会自动把图标并进 IconState（LS 认识、桌面不显示）。
+// daemon 启动时补一次：缺就加一页，然后 respring。
+static void YkEnsureIcon(void) {
+    NSString *bid = @"com.yk.engine.ui";
+    NSString *path = @"/var/mobile/Library/SpringBoard/IconState.plist";
+    NSData *d = [NSData dataWithContentsOfFile:path];
+    if (!d) return;
+    id st = [NSPropertyListSerialization propertyListWithData:d
+                 options:NSPropertyListMutableContainersAndLeaves format:NULL error:NULL];
+    if (![st isKindOfClass:[NSMutableDictionary class]]) return;
+    NSMutableArray *pages = ((NSMutableDictionary *)st)[@"iconLists"];
+    if (![pages isKindOfClass:[NSMutableArray class]]) return;
+    for (NSArray *page in pages) {
+        for (id item in page) {
+            if ([item isKindOfClass:[NSString class]] && [item isEqualToString:bid]) return;
+        }
+    }
+    [pages addObject:[NSMutableArray arrayWithObject:bid]];
+    NSData *out = [NSPropertyListSerialization dataWithPropertyList:st
+                        format:NSPropertyListBinaryFormat_v1_0 options:0 error:NULL];
+    if (!out) return;
+    if (![out writeToFile:path atomically:YES]) return;
+    [[NSFileManager defaultManager] setAttributes:@{ NSFileOwnerAccountName: @"mobile",
+                                                     NSFileGroupOwnerAccountName: @"mobile" }
+                                     ofItemAtPath:path error:NULL];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(0, 0), ^{
+        NSString *k = YkFindTool(@"killall");
+        if (k) YkSpawnWait(k, @[@"-9", @"SpringBoard"]);
+    });
+}
+
 BOOL YkServiceRunning(void) { return gYKServiceRunning != 0; }
 void YkSetServiceRunning(BOOL on) {
     if (on && !gYKServiceRunning && gYKServiceServer) {
@@ -106,7 +140,11 @@ void YkSetServiceRunning(BOOL on) {
 static NSString *YkRootPath(void) {
     static NSString *cached = nil;
     if (cached) return cached;
-    NSString *exe = NSProcessInfo.processInfo.arguments.firstObject;
+    char buf[4096] = {0};
+    uint32_t size = sizeof(buf);
+    NSString *exe = nil;
+    if (_NSGetExecutablePath(buf, &size) == 0) exe = [NSString stringWithUTF8String:buf];
+    if (!exe.length) exe = NSProcessInfo.processInfo.arguments.firstObject;
     if (!exe.length) exe = NSBundle.mainBundle.executablePath;
     // .../.jbroot-XXXX/usr/bin/ykenginelite -> .../.jbroot-XXXX
     NSString *p1 = [exe stringByDeletingLastPathComponent];   // .../usr/bin
@@ -514,6 +552,9 @@ int main(int argc, char *argv[]) {
         // 关键：忽略 SIGPIPE，否则向已关闭连接 write() 会直接杀死进程
         signal(SIGPIPE, SIG_IGN);
         NSLog(@"[YKEngineLite] boot, port=%u", YKListenPort());
+
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_global_queue(0, 0), ^{ YkEnsureIcon(); });
 
         HTTPServer *server = [HTTPServer new];
         gYKServiceServer = server;
