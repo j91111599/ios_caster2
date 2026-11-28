@@ -1,3 +1,4 @@
+#import <mach/mach_time.h>
 //  YKSBProbe — SpringBoard 内部注入自测
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
