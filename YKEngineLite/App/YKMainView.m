@@ -153,14 +153,11 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     for (NSInteger i = 0; i < 3; i++) {
         NSArray *r = rows[i];
         BOOL on = [r[3] intValue] == 1;
-        BOOL off = [r[3] intValue] == 0;
         CGFloat y = 72 + i * 80;
         CGFloat h = ([r[3] intValue] < 0) ? 72 : 68;
         UIView *row = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, y, CARD_W - INNER_PAD * 2, h)];
-        // 开启/已连接 → 淡蓝底；关闭 → 白底灰边
-        row.backgroundColor = (on || [r[3] intValue] < 0 && NO) ? [YkBlue() colorWithAlphaComponent:0.06]
-                                                              : [UIColor whiteColor];
-        if (off) row.backgroundColor = [UIColor colorWithWhite:0.99 alpha:1.0];
+        // 开启 → 淡蓝底蓝边；关闭 → 白底灰边
+        row.backgroundColor = on ? [YkBlue() colorWithAlphaComponent:0.06] : [UIColor whiteColor];
         row.layer.cornerRadius = 12.0;
         row.layer.borderWidth = 1.0;
         row.layer.borderColor = (on ? [YkBlue() colorWithAlphaComponent:0.18]
