@@ -1,0 +1,474 @@
+openapi: 3.1.0
+info:
+  title: YK Engine Lite API
+  version: 31.6.4
+  description: |
+    iPhone 远控服务（Lite 重建版）HTTP API。默认业务口 65323，控制口 65325，
+    App 口 65324（仅前台可达）。所有响应使用 {"value": ...} 信封，失败为
+    {"value.error": "...", "value.message": "..."}。坐标为屏幕像素（本机 750x1334）。
+servers:
+  - url: http://{host}:65323
+    description: root 守护进程（业务口，可被「服务开关」关闭）
+    variables:
+      host: { default: 192.168.1.43 }
+  - url: http://{host}:65325
+    description: root 守护进程（控制口，永远在线）
+    variables:
+      host: { default: 192.168.1.43 }
+  - url: http://{host}:65324
+    description: App 内置服务（仅 App 前台时可达）
+    variables:
+      host: { default: 192.168.1.43 }
+
+components:
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        value: {}
+    Error:
+      type: object
+      properties:
+        value.error: { type: string }
+        value.message: { type: string }
+    Point:
+      type: object
+      properties:
+        x: { type: number }
+        y: { type: number }
+        touch: { type: integer, enum: [0, 1], description: "1=按下/移动, 0=抬起" }
+        delayMs: { type: number }
+        finger: { type: integer, description: "多指时从 1 开始" }
+  responses:
+    Ok:
+      description: 成功信封
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+    Fail:
+      description: 失败信封（HTTP 可能是 200）
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+paths:
+  /health:
+    get:
+      summary: 健康检查
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /routes:
+    get:
+      summary: 路由表（Lite 返回空 registry）
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /session/create:
+    post:
+      summary: 创建会话（Lite 不校验 header，兼容原版客户端）
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /session/list:
+    get:
+      summary: 会话列表（守护进程只回 state=active）
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /screen/info:
+    get:
+      summary: 屏幕信息
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/ping:
+    post:
+      summary: 触控通道判活
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/tap:
+    post:
+      summary: 点击
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [x, y]
+              properties:
+                x: { type: number }
+                y: { type: number }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/longPress:
+    post:
+      summary: 长按
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [x, y]
+              properties:
+                x: { type: number }
+                y: { type: number }
+                duration: { type: number, default: 1.0 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/doubleTap:
+    post:
+      summary: 双击
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                x: { type: number }
+                y: { type: number }
+                gap: { type: number, default: 0.08 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/swipe:
+    post:
+      summary: 滑动
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [x, y, toX, toY]
+              properties:
+                x: { type: number }
+                y: { type: number }
+                toX: { type: number }
+                toY: { type: number }
+                duration: { type: number, default: 0.3 }
+                steps: { type: integer, default: 12, minimum: 8 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/home:
+    post:
+      summary: Home 键
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count: { type: integer, default: 1 }
+                hold: { type: number, default: 0 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/pinch:
+    post:
+      summary: 双指缩放
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startPoints:
+                  type: array
+                  minItems: 2
+                  maxItems: 2
+                  items: { $ref: '#/components/schemas/Point' }
+                endPoints:
+                  type: array
+                  minItems: 2
+                  maxItems: 2
+                  items: { $ref: '#/components/schemas/Point' }
+                duration: { type: number, default: 0.4 }
+                steps: { type: integer, default: 12 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /touch/sequence:
+    post:
+      summary: 任意轨迹（录制回放同款）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [points]
+              properties:
+                points:
+                  type: array
+                  items: { $ref: '#/components/schemas/Point' }
+                delayMs: { type: number, default: 16 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /file/exists:
+    get:
+      summary: 路径存在性（"file"/"directory"/false）
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /file/size:
+    get:
+      summary: 文件大小（字节）
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /file/read:
+    post:
+      summary: 读文件（utf8 或 base64）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /file/write:
+    post:
+      summary: 写文件（UTF-8 文本）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, data]
+              properties:
+                path: { type: string }
+                data: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /file/append:
+    post:
+      summary: 追加写（大文件分块用）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, data]
+              properties:
+                path: { type: string }
+                data: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /file/list:
+    get:
+      summary: 列目录
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /file/remove:
+    post:
+      summary: 删除
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /prefs/get:
+    post:
+      summary: 读偏好（守护进程域）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key: { type: string }
+                namespace: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /prefs/set:
+    post:
+      summary: 写偏好
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key: { type: string }
+                value: {}
+                namespace: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /crypto/base64/encode:
+    post:
+      summary: Base64 编码
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /crypto/digest:
+    post:
+      summary: 摘要
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data, algorithm]
+              properties:
+                data: { type: string }
+                algorithm: { type: string, enum: [md5, sha1, sha256, sha512] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /crypto/randomBytes:
+    post:
+      summary: 随机字节（base64 返回）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [length]
+              properties:
+                length: { type: integer }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /network/get:
+    post:
+      summary: 由设备发起 GET
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+                headers: { type: object }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /network/postJSON:
+    post:
+      summary: 由设备发起 POST(JSON)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+                body: {}
+                headers: { type: object }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /record/list:
+    get:
+      summary: 录制列表
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /record/save:
+    post:
+      summary: 保存录制
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [steps]
+              properties:
+                name: { type: string }
+                duration: { type: number }
+                steps:
+                  type: array
+                  items: { $ref: '#/components/schemas/Point' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /record/play:
+    post:
+      summary: 回放（异步）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                times: { type: integer, default: 1 }
+                delayMs: { type: integer, default: 0 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /record/remove:
+    post:
+      summary: 删除录制
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /system/service:
+    get:
+      summary: 服务状态
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      summary: 开关服务端口(65323)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [on]
+              properties:
+                on: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /system/respring:
+    post:
+      summary: 重启 SpringBoard（会黑屏数秒）
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /system/install:
+    post:
+      summary: 安装 deb（不依赖 shell）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /system/shell:
+    post:
+      summary: root shell（当前 output 恒空，见文档）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
