@@ -12,6 +12,9 @@ void YkHIDBoot(void);
 #import <UIKit/UIKit.h>
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
+#import <spawn.h>
+#import <sys/wait.h>
+extern char **environ;
 
 // 模块入口（来自 Recovered/*.m）
 extern uint64_t gYkSenderID;
