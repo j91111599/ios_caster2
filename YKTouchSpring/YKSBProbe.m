@@ -58,6 +58,37 @@ static void SBMHIDCallback(void *tt, void *r, void *s, void *e) {
         }
         SBLog(@"HIDMON t11 sid=%llu mask=%ld range=%ld touch=%ld idx=%ld ident=%ld disp=%ld x=%.1f y=%.1f",
               (unsigned long long)sid, mask, rng, tch, idx, ident, disp, x, y);
+
+        // 打印子事件（finger）字段
+        void *fc2 = Sym(@"IOHIDEventGetChildren");
+        if (fc2) {
+            CFArrayRef kids = ((CFArrayRef (*)(void *))fc2)(e);
+            if (kids) {
+                CFIndex kn = CFArrayGetCount(kids);
+                for (CFIndex ki = 0; ki < kn; ki++) {
+                    void *k = (void *)CFArrayGetValueAtIndex(kids, ki);
+                    long km = 0, kr = 0, kt = 0, kix = 0, kid2 = 0, kd = 0, kty = 0;
+                    double kx = 0, ky = 0, kz = 0, kp = 0;
+                    if (fi) {
+                        km  = (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0007);
+                        kr  = (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0008);
+                        kt  = (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0009);
+                        kix = (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0005);
+                        kid2= (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0006);
+                        kd  = (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0019);
+                        kty = (long)((int64_t (*)(void *, uint32_t))fi)(k, 0xB0004);
+                    }
+                    if (ff2) {
+                        kx = ((double (*)(void *, uint32_t))ff2)(k, 0xB0000);
+                        ky = ((double (*)(void *, uint32_t))ff2)(k, 0xB0001);
+                        kz = ((double (*)(void *, uint32_t))ff2)(k, 0xB0002);
+                        kp = ((double (*)(void *, uint32_t))ff2)(k, 0xB000A);
+                    }
+                    SBLog(@"  CHILD[%ld] type=%ld mask=%ld range=%ld touch=%ld idx=%ld ident=%ld disp=%ld x=%.1f y=%.1f z=%.1f press=%.1f",
+                          (long)ki, kty, km, kr, kt, kix, kid2, kd, kx, ky, kz, kp);
+                }
+            }
+        }
     }
     (void)tt; (void)r; (void)s;
 }
