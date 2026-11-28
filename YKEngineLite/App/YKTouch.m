@@ -336,3 +336,73 @@ NSDictionary *YkTouchPing(void) {
     if (r) return @{ @"value": r };
     return @{ @"value": @{ @"ok": @NO, @"reason": @"socket 不可用（tweak 未加载）" } };
 }
+
+
+#pragma mark - 闭环自检：Monitor client 能否收到自己派发的事件
+
+static volatile int gYkMonCount = 0;
+static volatile double gYkMonX = -1, gYkMonY = -1;
+
+static void YkMonCallback(void *target, void *refcon, void *service, IOHIDEventRef event) {
+    if (!event) return;
+    gYkMonCount++;
+    void *ft = YkSym("IOHIDEventGetType");
+    if (ft) {
+        uint32_t t = ((uint32_t (*)(IOHIDEventRef))ft)(event);
+        if (t == 11) {   // kIOHIDEventTypeDigitizer
+            void *fg = YkSym("IOHIDEventGetFloatValue");
+            if (fg) {
+                gYkMonX = ((double (*)(IOHIDEventRef, uint32_t))fg)(event, 0xB0000);
+                gYkMonY = ((double (*)(IOHIDEventRef, uint32_t))fg)(event, 0xB0001);
+            }
+            fprintf(stderr, "[loopback] MONITOR GOT digitizer count=%d x=%.1f y=%.1f\n",
+                    gYkMonCount, gYkMonX, gYkMonY); fflush(stderr);
+        }
+    }
+    (void)target; (void)refcon; (void)service;
+}
+
+static IOHIDEventSystemClientRef gYkMon = NULL;
+
+NSDictionary *YkLoopbackTest(double x, double y) {
+    // 1) 建 Monitor client
+    if (!gYkMon) {
+        void *hc = YkSym("IOHIDEventSystemClientCreateWithType");
+        if (hc) {
+            gYkMon = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef, int, CFDictionaryRef))hc)(
+                        kCFAllocatorDefault, 1 /*Monitor*/, NULL);
+        }
+        if (gYkMon) {
+            void *hr = YkSym("IOHIDEventSystemClientRegisterEventCallback");
+            if (hr) ((void (*)(IOHIDEventSystemClientRef, void *, void *, uint32_t))hr)(
+                        gYkMon, (void *)YkMonCallback, NULL, 0);
+            void *hs = YkSym("IOHIDEventSystemClientScheduleWithRunLoop");
+            if (hs) ((void (*)(IOHIDEventSystemClientRef, CFRunLoopRef, CFStringRef))hs)(
+                        gYkMon, CFRunLoopGetMain(), kCFRunLoopCommonModes);
+            fprintf(stderr, "[loopback] monitor ready %p\n", (void *)gYkMon); fflush(stderr);
+        } else {
+            fprintf(stderr, "[loopback] monitor create FAILED\n"); fflush(stderr);
+        }
+    }
+
+    gYkMonCount = 0; gYkMonX = -1; gYkMonY = -1;
+
+    // 2) 用 Inject client 派发
+    YkInject(1, x, y, 1, 1.0);       // began
+    usleep(150000);
+    int afterDown = gYkMonCount;
+
+    // 3) 等待 monitor 回调
+    for (int i = 0; i < 20; i++) {
+        if (gYkMonCount > 0) break;
+        usleep(50000);
+    }
+
+    return @{ @"value": @{
+        @"monitorReady": @(gYkMon != NULL),
+        @"afterDown": @(afterDown),
+        @"received": @(gYkMonCount),
+        @"monX": @(gYkMonX),
+        @"monY": @(gYkMonY),
+        @"sentX": @(x), @"sentY": @(y) } };
+}

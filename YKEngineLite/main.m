@@ -14,6 +14,7 @@
 
 // 模块入口（来自 Recovered/*.m）
 extern uint64_t gYkSenderID;
+extern NSDictionary *YkLoopbackTest(double x, double y);
 extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
 extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d);
@@ -102,6 +103,7 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
                                                    [body[@"toY"] doubleValue],
                                                    [body[@"duration"] doubleValue]);
         if ([v isEqualToString:@"ping"])       return @{ @"value": @{ @"ok": @YES, @"pid": @(getpid()) } };
+        if ([v isEqualToString:@"loopback"])   return YkLoopbackTest(x, y);
         return @{ @"value.error": @"not_found", @"value.message": v };
     }
 
