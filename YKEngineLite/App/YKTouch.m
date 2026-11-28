@@ -161,11 +161,26 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     if (!hand) return;
 
     fprintf(stderr, "[touch] step3 before FingerEvent\n"); fflush(stderr);
+    // 完全对齐原版 YKPointRadius.m 的写法：
+//   index = 0, z = y, 并在 AppendEvent 之前补齐 5 个物理属性
     IOHIDEventRef fingerEv = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
-                                              finger, finger, mask, 0,
-                                              x, y, 0.0, press, 0.0, 1, touch, 0);
-    fprintf(stderr, "[touch] step4 finger=%p append=%p\n", (void *)fingerEv, fa); fflush(stderr);
+                                              0,            // index  ← 原版固定 0
+                                              1,            // identity
+                                              mask, 0,
+                                              x, y,
+                                              y,            // z       ← 原版用 y
+                                              press, 0.0, 1, touch, 0);
     if (fingerEv) {
+        void *sf = YkSym("IOHIDEventSetFloatValue");
+        if (sf) {
+            void (*SetF)(IOHIDEventRef, uint32_t, double) = (void (*)(IOHIDEventRef, uint32_t, double))sf;
+            SetF(fingerEv, 0xb0011, 1.0);   // Quality
+            SetF(fingerEv, 0xb0012, 1.0);   // Density
+            SetF(fingerEv, 0xb0013, 0.0);   // Irregularity
+            SetF(fingerEv, 0xb0014, 5.0);   // MajorRadius
+            SetF(fingerEv, 0xb0015, 5.0);   // MinorRadius
+            fprintf(stderr, "[touch] finger physics set\n"); fflush(stderr);
+        }
         if (fa) ((YkAppendFn)fa)(hand, fingerEv, 0);
         fprintf(stderr, "[touch] step5 appended\n"); fflush(stderr);
         CFRelease(fingerEv);
