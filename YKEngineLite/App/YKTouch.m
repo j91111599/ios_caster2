@@ -210,13 +210,14 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     else if (phase == 3)    mask = 4;
     else                    mask = 1;   // up: Range，让系统识别为 Ended
     int      touch = (phase == 2) ? 0 : 1;
+    int      range = (phase == 2) ? 0 : 1;   // up 时 range=0
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
     // 父事件：transducerType = 3 (Hand)
     fprintf(stderr, "[touch] step1 before DigitizerEvent\n"); fflush(stderr);
     IOHIDEventRef hand = ((YkDigitizerFn)fp)(kCFAllocatorDefault, ts,
                                              3, 0, 0, mask, 0,
-                                             x, y, 0.0, press, 0.0, 1, touch, 0);
+                                             x, y, 0.0, press, 0.0, range, touch, 0);
     fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
     // 原版：hand 事件必须设置字段 4 = 1（键盘事件同样设置）
@@ -238,7 +239,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
                                               mask, 0,
                                               x, y,
                                               y,            // z       ← 原版用 y
-                                              press, 0.0, 1, touch, 0);
+                                              press, 0.0, range, touch, 0);
     if (fingerEv) {
         void *sf = YkSym("IOHIDEventSetFloatValue");
         if (sf) {
