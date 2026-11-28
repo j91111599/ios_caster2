@@ -1,7 +1,7 @@
-//  YKSBProbe.m — 在 SpringBoard 进程内注册 HID monitor + hook sendEvent:
-//  两个观测点，互相校准：
-//    A) HID monitor  → 事件有没有跨进程到达 SpringBoard 的 HID 客户端
-//    B) sendEvent:   → 事件有没有变成 UIEvent
+//  YKSBProbe.m — SpringBoard 侧三层观测
+//   A) HID monitor        → 事件是否到达 SpringBoard 的 HID 层
+//   B) _handleHIDEvent:   → SpringBoard 是否处理 HID 事件
+//   C) UIWindow sendEvent:→ 是否变成 UIEvent
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -21,44 +21,47 @@ static void SBLog(NSString *fmt, ...) {
     [fh closeFile];
 }
 
-static void *Sym(NSString *name) {
+static void *Sym(NSString *n) {
     static void *qc = NULL;
     if (!qc) qc = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_LAZY);
-    void *p = qc ? dlsym(qc, name.UTF8String) : NULL;
+    void *p = qc ? dlsym(qc, n.UTF8String) : NULL;
     if (!p) {
         static void *hid = NULL;
         if (!hid) hid = dlopen("/System/Library/PrivateFrameworks/IOHID.framework/IOHID", RTLD_LAZY);
-        if (hid) p = dlsym(hid, name.UTF8String);
+        if (hid) p = dlsym(hid, n.UTF8String);
     }
     return p;
 }
 
-// A) HID monitor
-static void SBMHIDCallback(void *target, void *refcon, void *service, void *event) {
-    if (!event) return;
+static void SBMHIDCallback(void *t, void *r, void *s, void *e) {
+    if (!e) return;
     void *ft = Sym(@"IOHIDEventGetType");
-    uint32_t t = ft ? ((uint32_t (*)(void *))ft)(event) : 0;
-    void *fs = Sym(@"IOHIDEventGetSenderID");
-    uint64_t sid = fs ? ((uint64_t (*)(void *))fs)(event) : 0;
-    SBLog(@"HIDMON type=%u sender=%llu", t, (unsigned long long)sid);
-    (void)target; (void)refcon; (void)service;
+    uint32_t ty = ft ? ((uint32_t (*)(void *))ft)(e) : 0;
+    if (ty == 11) {
+        void *fs = Sym(@"IOHIDEventGetSenderID");
+        uint64_t sid = fs ? ((uint64_t (*)(void *))fs)(e) : 0;
+        SBLog(@"HIDMON type=11 sender=%llu", (unsigned long long)sid);
+    }
+    (void)t; (void)r; (void)s;
 }
 
-// B) sendEvent
-typedef void (*SendEventFn)(id, SEL, UIEvent *);
-static SendEventFn gOrigSendEvent = NULL;
-static void YKSendEventHook(id self, SEL _cmd, UIEvent *event) {
+typedef void (*GenericFn)(id, SEL, id);
+static GenericFn gOrigHandleHID = NULL;
+static void YKHandleHID(id self, SEL _cmd, id ev) {
+    SBLog(@"HANDLEHID %@ -> %@", NSStringFromClass([self class]), NSStringFromSelector(_cmd));
+    if (gOrigHandleHID) gOrigHandleHID(self, _cmd, ev);
+}
+
+static GenericFn gOrigWinSend = NULL;
+static void YKWinSend(id self, SEL _cmd, id ev) {
     @autoreleasepool {
-        NSSet *touches = nil;
-        @try { touches = [event allTouches]; } @catch (__unused NSException *e) { }
-        if (touches.count > 0) {
-            NSMutableString *d = [NSMutableString string];
-            for (UITouch *t in touches)
-                [d appendFormat:@"[p=%ld] ", (long)t.phase];
-            SBLog(@"SENDEVENT touches=%lu %@", (unsigned long)touches.count, d);
-        }
+        id touches = nil;
+        @try { touches = [ev allTouches]; } @catch (__unused NSException *x) { }
+        NSUInteger n = 0;
+        if ([touches respondsToSelector:@selector(count)]) n = [(NSSet *)touches count];
+        if (n) SBLog(@"WINSEND touches=%lu", (unsigned long)n);
     }
-    if (gOrigSendEvent) gOrigSendEvent(self, _cmd, event);
+    if (gOrigWinSend) gOrigWinSend(self, _cmd, ev);
 }
 
 __attribute__((constructor))
@@ -73,17 +76,39 @@ static void YKSBProbeInit(void) {
                 if (hr) ((void (*)(void *, void *, void *, uint32_t))hr)(cl, (void *)SBMHIDCallback, NULL, 0);
                 void *hs = Sym(@"IOHIDEventSystemClientScheduleWithRunLoop");
                 if (hs) ((void (*)(void *, CFRunLoopRef, CFStringRef))hs)(cl, CFRunLoopGetMain(), kCFRunLoopCommonModes);
-                SBLog(@"hidmon client=%p", cl);
-            } else SBLog(@"hidmon client=NULL");
-        } else SBLog(@"hidmon no Create sym");
+                SBLog(@"probe A ok");
+            }
+        }
+
+        NSArray *clsNames = @[@"UIApplication", @"UIWindow", @"SBApplication",
+                              @"SpringBoard", @"SBMainWorkspace", @"SBHIDEventProcessor"];
+        for (NSString *cn in clsNames) {
+            Class c = NSClassFromString(cn);
+            if (!c) continue;
+            unsigned int n = 0;
+            Method *ms = class_copyMethodList(c, &n);
+            for (unsigned int i = 0; i < n; i++) {
+                NSString *sel = NSStringFromSelector(method_getName(ms[i]));
+                NSString *low = sel.lowercaseString;
+                if ([low containsString:@"hid"]) {
+                    SBLog(@"FOUND %@ -> %@", cn, sel);
+                    if ([sel hasPrefix:@"_handleHIDEvent"] || [sel hasPrefix:@"handleHIDEvent"]) {
+                        gOrigHandleHID = (GenericFn)method_getImplementation(ms[i]);
+                        method_setImplementation(ms[i], (IMP)YKHandleHID);
+                        SBLog(@"HOOKED %@", sel);
+                    }
+                }
+            }
+            if (ms) free(ms);
+        }
 
         @try {
-            Method m = class_getInstanceMethod([UIApplication class], @selector(sendEvent:));
+            Method m = class_getInstanceMethod([UIWindow class], @selector(sendEvent:));
             if (m) {
-                gOrigSendEvent = (SendEventFn)method_getImplementation(m);
-                method_setImplementation(m, (IMP)YKSendEventHook);
-                SBLog(@"hook sendEvent: OK");
-            } else SBLog(@"sendEvent: not found");
-        } @catch (NSException *e) { SBLog(@"hook fail %@", e); }
+                gOrigWinSend = (GenericFn)method_getImplementation(m);
+                method_setImplementation(m, (IMP)YKWinSend);
+                SBLog(@"probe C ok");
+            }
+        } @catch (__unused NSException *x) { }
     });
 }
