@@ -33,6 +33,19 @@ static void YkBootLog(NSString *fmt, ...) {
 }
 #import <signal.h>
 #import "YKHTTPServerCompat.h"
+
+#pragma mark - 引擎开关（服务开关按钮）
+
+static BOOL gYKServiceOff = NO;
+
+NSString *YKEnginePort(void) { return @"65324"; }
+
+void YKSetServiceEnabled(BOOL on) {
+    gYKServiceOff = !on;
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"YKServiceToggle"
+                                                        object:@(on)];
+}
+
 NSDictionary *YKAppDispatchPath(NSString *method, NSString *path, NSDictionary *body, NSDictionary *query);
 @interface YKMainView : UIView
 @end

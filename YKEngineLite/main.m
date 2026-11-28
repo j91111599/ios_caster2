@@ -265,6 +265,95 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
         return r ?: @{ @"value.error": e ?: @"ui_error", @"value.message": @"UI 派发失败" };
     }
 
+    // ---- 系统（root 守护进程才有的能力）----
+    if ([head isEqualToString:@"system"]) {
+        NSString *verb = s.count > 1 ? s[1] : @"";
+        if ([verb isEqualToString:@"respring"]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                           dispatch_get_global_queue(0, 0), ^{
+                system("killall -9 backboardd 2>/dev/null || killall -9 SpringBoard 2>/dev/null");
+            });
+            return @{ @"value": @{ @"ok": @YES, @"action": @"respring" } };
+        }
+        if ([verb isEqualToString:@"shell"]) {
+            NSString *cmd = body[@"command"] ?: @"";
+            if (!cmd.length) return @{ @"value.error": @"bad_request", @"value.message": @"缺少 command" };
+            NSString *outPath = @"/var/mobile/Media/_daemon_sh.out";
+            NSString *full = [NSString stringWithFormat:
+                              @"( %@ ) > %@ 2>&1; echo $? >> %@", cmd, outPath, outPath];
+            system(full.UTF8String);
+            NSString *out = [NSString stringWithContentsOfFile:outPath
+                                                      encoding:NSUTF8StringEncoding error:NULL] ?: @"";
+            return @{ @"value": @{ @"output": out, @"exitCode": @0 } };
+        }
+        if ([verb isEqualToString:@"service"]) {
+            return @{ @"value": @{ @"on": @YES, @"port": @(YKListenPort()) } };
+        }
+    }
+
+    // ---- 录制（root 侧执行注入）----
+    if ([head isEqualToString:@"record"]) {
+        NSString *verb = s.count > 1 ? s[1] : @"";
+        NSString *dir = @"/var/mobile/Library/YKEngineLite/records";
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                                  withIntermediateDirectories:YES attributes:nil error:NULL];
+        if ([verb isEqualToString:@"list"] || [verb isEqualToString:@"records"]) {
+            NSMutableArray *arr = [NSMutableArray array];
+            NSArray *fs = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:NULL];
+            for (NSString *f in fs) {
+                if (![f.pathExtension isEqualToString:@"json"]) continue;
+                NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:
+                                   [dir stringByAppendingPathComponent:f]];
+                if (d) [arr addObject:d];
+            }
+            return @{ @"value": @{ @"records": arr, @"count": @(arr.count) } };
+        }
+        if ([verb isEqualToString:@"save"]) {
+            NSArray *steps = body[@"steps"] ?: body[@"points"];
+            if (![steps isKindOfClass:[NSArray class]] || !steps.count)
+                return @{ @"value.error": @"bad_request", @"value.message": @"steps 为空" };
+            NSString *rid = body[@"id"] ?: [NSString stringWithFormat:@"rec_%.0f",
+                                            [[NSDate date] timeIntervalSince1970] * 1000];
+            NSDictionary *rec = @{ @"id": rid,
+                                   @"name": body[@"name"] ?: @"未命名",
+                                   @"duration": body[@"duration"] ?: @0,
+                                   @"count": @(steps.count),
+                                   @"createdAt": @([[NSDate date] timeIntervalSince1970]),
+                                   @"steps": steps };
+            NSString *path = [dir stringByAppendingPathComponent:
+                              [rid stringByAppendingString:@".json"]];
+            [rec writeToFile:path atomically:YES];
+            return @{ @"value": @{ @"ok": @YES, @"id": rid, @"count": @(steps.count) } };
+        }
+        if ([verb isEqualToString:@"remove"] || [verb isEqualToString:@"delete"]) {
+            NSString *rid = body[@"id"] ?: @"";
+            NSString *path = [dir stringByAppendingPathComponent:
+                              [rid stringByAppendingString:@".json"]];
+            [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+            return @{ @"value": @{ @"ok": @YES, @"id": rid } };
+        }
+        if ([verb isEqualToString:@"play"] || [verb isEqualToString:@"playback"]) {
+            NSString *rid = body[@"id"] ?: @"";
+            int times = body[@"times"] ? [body[@"times"] intValue] : 1;
+            if (times < 1) times = 1;
+            NSString *path = [dir stringByAppendingPathComponent:
+                              [rid stringByAppendingString:@".json"]];
+            NSDictionary *rec = [NSDictionary dictionaryWithContentsOfFile:path];
+            NSArray *steps = rec[@"steps"];
+            if (![steps isKindOfClass:[NSArray class]] || !steps.count)
+                return @{ @"value.error": @"not_found", @"value.message": @"录制不存在" };
+            int delayMs = body[@"delayMs"] ? [body[@"delayMs"] intValue] : 0;
+            dispatch_async(dispatch_get_global_queue(0, 0), ^{
+                if (delayMs > 0) usleep((useconds_t)delayMs * 1000);
+                for (int t = 0; t < times; t++) {
+                    YkTouchSequence(steps, 16);
+                    usleep(200000);
+                }
+            });
+            return @{ @"value": @{ @"ok": @YES, @"id": rid, @"times": @(times) } };
+        }
+    }
+
     // ---- 未移植 ----
     if ([@[@"touch", @"element", @"image", @"ocr", @"yolo", @"device", @"system",
            @"app", @"record", @"vpn", @"keyboard", @"archive", @"internal", @"wda",

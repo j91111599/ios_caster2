@@ -19,6 +19,21 @@ static UIColor *YkOrange(void)  { return [UIColor colorWithRed:0.96 green:0.63 b
 static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 blue:0.42 alpha:1.0]; }
 static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 blue:0.85 alpha:1.0]; }
 
+#define YK_DEF_NAME     @"yk.deviceName"
+#define YK_DEF_SERVICE  @"yk.serviceOn"
+#define YK_DEF_WAN      @"yk.wanOn"
+#define YK_DEF_SCRIPTS  @"yk.scripts"
+
+extern void YKAlert(UIViewController *host, NSString *title, NSString *message,
+                    NSArray<NSString *> *buttons, void (^onIndex)(NSInteger idx));
+extern void YKAlertRename(UIViewController *host, NSString *current, void (^onSave)(NSString *name));
+extern void YKAlertRestart(UIViewController *host, void (^onConfirm)(void));
+extern BOOL YKRequestRestartUserspace(void);
+extern UIViewController *YKPresentScan(UIViewController *host, BOOL scriptMode,
+                                       NSString *title, void (^onCode)(NSString *code));
+extern void YKSetServiceEnabled(BOOL on);
+extern NSString *YKEnginePort(void);
+
 #define NAV_H      64.0
 #define CARD_X     20.0
 #define CARD_W     335.0
@@ -44,6 +59,16 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
 - (void)ykSelectTab:(NSInteger)idx;
 - (void)ykShowPageObj:(id)o;
 - (void)ykReloadScripts;
+- (UIViewController *)ykHost;
+- (void)ykToggleService:(UISwitch *)sw;
+- (void)ykToggleWAN:(UISwitch *)sw;
+- (void)ykRename;
+- (void)ykCopyID;
+- (void)ykScanConnect;
+- (void)ykAddScript;
+- (void)ykRestartUserspace;
+- (void)ykOpenRecordBall;
+- (void)ykRefreshRecordList;
 @end
 
 @implementation YKMainView {
@@ -53,6 +78,16 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     UIView *_tabCapsule;
     UIImageView *_navLeftIcon;
     UIButton *_navRightBtn;
+    UISwitch *_svcSwitch;
+    UISwitch *_wanSwitch;
+    UILabel *_lblDeviceName;
+    UILabel *_lblDeviceID;
+    UIView *_recordListBox;
+    UIView *_ballView;
+    UILabel *_ballLabel;
+    BOOL _ballRecording;
+    NSMutableArray *_ballSteps;
+    NSTimeInterval _ballStartAt;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -189,10 +224,14 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     scan.layer.cornerRadius = 10.0;
     [scan setTitleColor:YkBlue() forState:UIControlStateNormal];
     scan.tintColor = YkBlue();
+    [scan addTarget:self action:@selector(ykScanConnect)
+  forControlEvents:UIControlEventTouchUpInside];
     [c1 addSubview:scan];
 
-    NSArray *rows = @[ @[@"服务开关", @"允许局域网电脑接入当前设备", @"bolt.fill", @1],
-                       @[@"广域网", @"允许外网通过安全隧道接入当前设备", @"globe", @0],
+    BOOL svcOn = [[NSUserDefaults standardUserDefaults] objectForKey:YK_DEF_SERVICE] ? [[NSUserDefaults standardUserDefaults] boolForKey:YK_DEF_SERVICE] : YES;
+    BOOL wanOn = [[NSUserDefaults standardUserDefaults] boolForKey:YK_DEF_WAN];
+    NSArray *rows = @[ @[@"服务开关", @"允许局域网电脑接入当前设备", @"bolt.fill", @(svcOn ? 1 : 0)],
+                       @[@"广域网", @"允许外网通过安全隧道接入当前设备", @"globe", @(wanOn ? 1 : 0)],
                        @[@"未连接设备", @"当前暂无电脑接入", @"display", @(-1)] ];
     for (NSInteger i = 0; i < 3; i++) {
         NSArray *r = rows[i];
@@ -226,7 +265,12 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
         if (!isDevice) {
             UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(row.bounds.size.width - 51 - 12, 18, 51, 31)];
             sw.on = on; sw.onTintColor = YkBlue();
+            sw.tag = 100 + i;
+            [sw addTarget:self action:@selector(ykSwitchChanged:)
+                forControlEvents:UIControlEventValueChanged];
             [row addSubview:sw];
+            if (i == 0) _svcSwitch = sw;
+            if (i == 1) _wanSwitch = sw;
         } else {
             UILabel *pill = [self ykLabel:@"待接入" size:12 bold:NO color:YkSub()];
             pill.textAlignment = NSTextAlignmentRight;
@@ -261,23 +305,36 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
 
     UILabel *n1 = [self ykLabel:@"设备名称" size:12 bold:NO color:YkSub()];
     n1.frame = CGRectMake(INNER_PAD, 72, 200, 17); [c3 addSubview:n1];
-    UILabel *nv = [self ykLabel:@"iPhone" size:19 bold:YES color:YkMain()];
-    nv.frame = CGRectMake(INNER_PAD + 14, 111, 219, 24); [c3 addSubview:nv];
+    UIView *nameField = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 96, CARD_W - INNER_PAD * 2, 56)];
+    nameField.backgroundColor = [UIColor colorWithWhite:0.965 alpha:1.0];
+    nameField.layer.cornerRadius = 12.0;
+    [c3 addSubview:nameField];
+    NSString *devName = [[NSUserDefaults standardUserDefaults] stringForKey:YK_DEF_NAME] ?: @"iPhone";
+    _lblDeviceName = [self ykLabel:devName size:19 bold:YES color:YkMain()];
+    _lblDeviceName.frame = CGRectMake(14, 16, 210, 24); [nameField addSubview:_lblDeviceName];
     UIButton *edit = [UIButton buttonWithType:UIButtonTypeSystem];
-    edit.frame = CGRectMake(CARD_W - INNER_PAD - 52, 105, 40, 40);
+    edit.frame = CGRectMake(nameField.bounds.size.width - 52, 8, 40, 40);
     [edit setImage:[UIImage systemImageNamed:@"pencil"] forState:UIControlStateNormal];
-    edit.tintColor = YkMain(); [c3 addSubview:edit];
+    edit.tintColor = YkMain();
+    [edit addTarget:self action:@selector(ykRename) forControlEvents:UIControlEventTouchUpInside];
+    [nameField addSubview:edit];
 
     UILabel *n2 = [self ykLabel:@"设备 ID" size:12 bold:NO color:YkSub()];
     n2.frame = CGRectMake(INNER_PAD, 165, 200, 17); [c3 addSubview:n2];
-    UILabel *nv2 = [self ykLabel:@"1983fed10d4062e506291b023e92c27cc6e470bf" size:13 bold:NO color:YkMain()];
-    nv2.frame = CGRectMake(INNER_PAD + 14, 196, 219, 40);
-    nv2.numberOfLines = 2; nv2.lineBreakMode = NSLineBreakByCharWrapping;
-    [c3 addSubview:nv2];
+    UIView *idField = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 186, CARD_W - INNER_PAD * 2, 60)];
+    idField.backgroundColor = [UIColor colorWithWhite:0.965 alpha:1.0];
+    idField.layer.cornerRadius = 12.0;
+    [c3 addSubview:idField];
+    _lblDeviceID = [self ykLabel:@"1983fed10d4062e506291b023e92c27cc6e470bf" size:13 bold:NO color:YkMain()];
+    _lblDeviceID.frame = CGRectMake(14, 8, 210, 44);
+    _lblDeviceID.numberOfLines = 2; _lblDeviceID.lineBreakMode = NSLineBreakByCharWrapping;
+    [idField addSubview:_lblDeviceID];
     UIButton *copy = [UIButton buttonWithType:UIButtonTypeSystem];
-    copy.frame = CGRectMake(CARD_W - INNER_PAD - 52, 196, 40, 40);
+    copy.frame = CGRectMake(idField.bounds.size.width - 52, 10, 40, 40);
     [copy setImage:[UIImage systemImageNamed:@"doc.on.doc"] forState:UIControlStateNormal];
-    copy.tintColor = YkMain(); [c3 addSubview:copy];
+    copy.tintColor = YkMain();
+    [copy addTarget:self action:@selector(ykCopyID) forControlEvents:UIControlEventTouchUpInside];
+    [idField addSubview:copy];
 
     // ---------- 卡片四：备用用户空间 ----------
     UIView *c4 = [self ykCard:CGRectMake(CARD_X, 934, CARD_W, 176)];
@@ -294,6 +351,11 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     UILabel *t42 = [self ykLabel:@"垂直布局备用空间，配合当前 PC 连接，出现异常时使用"
                             size:12 bold:NO color:YkSub()];
     t42.frame = CGRectMake(68, 38, 190, 34); t42.numberOfLines = 2; [row4 addSubview:t42];
+    UIButton *spaceBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    spaceBtn.frame = row4.bounds;
+    [spaceBtn addTarget:self action:@selector(ykRestartUserspace)
+       forControlEvents:UIControlEventTouchUpInside];
+    [row4 addSubview:spaceBtn];
     UIImageView *chev = [[UIImageView alloc] initWithFrame:CGRectMake(row4.bounds.size.width - 26, 36, 12, 12)];
     chev.image = [UIImage systemImageNamed:@"chevron.right"];
     chev.tintColor = [UIColor colorWithWhite:0.75 alpha:1.0];
@@ -437,9 +499,43 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     rec.titleLabel.font = [UIFont boldSystemFontOfSize:17];
     [rec setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     rec.tintColor = [UIColor whiteColor];
+    [rec addTarget:self action:@selector(ykOpenRecordBall)
+  forControlEvents:UIControlEventTouchUpInside];
     [card addSubview:rec];
 
-    _recordScroll.contentSize = CGSizeMake(_W, 594);
+    // ---------- 我的录制（回放指引 + 列表）----------
+    UIView *rc = [self ykCard:CGRectMake(CARD_X, 594, CARD_W, 402)];
+    [_recordScroll addSubview:rc];
+    [self ykCardHeader:rc title:@"我的录制" symbol:@"list.bullet.rectangle" tint:YkMagenta()];
+
+    UILabel *rsub = [self ykLabel:@"回放流程怎么用" size:15 bold:YES color:YkMain()];
+    rsub.frame = CGRectMake(INNER_PAD, 72, 295, 20); [rc addSubview:rsub];
+
+    NSArray *rsteps = @[ @[@"1. 点回放，先选次数", @"可选 1 次、3 次、10 次、自定义次数，或无循环。",
+                           @"repeat.1", YkBlue()],
+                         @[@"2. 确认后回到桌面", @"回到桌面后开始注入，逐帧重放录制的事件。",
+                           @"play.fill", YkGreen()],
+                         @[@"3. 可暂停、继续、停止", @"回放中可随时停止；结束后自动回到本页。",
+                           @"stop.circle.fill", YkRed()] ];
+    for (NSInteger i = 0; i < 3; i++) {
+        NSArray *r = rsteps[i];
+        UIView *row = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 100 + i * 58,
+                                                              CARD_W - INNER_PAD * 2, 50)];
+        row.backgroundColor = [UIColor colorWithWhite(0.975, 1) colorWithAlphaComponent:1.0];
+        row.layer.cornerRadius = 10.0;
+        [rc addSubview:row];
+        [row addSubview:[self ykIconBox:CGRectMake(8, 9, 32, 32) symbol:r[2] tint:r[3] glyph:16]];
+        UILabel *t = [self ykLabel:r[0] size:14 bold:YES color:YkMain()];
+        t.frame = CGRectMake(50, 6, 220, 18); [row addSubview:t];
+        UILabel *d = [self ykLabel:r[1] size:11 bold:NO color:YkSub()];
+        d.frame = CGRectMake(50, 24, 220, 16); [row addSubview:d];
+    }
+
+    _recordListBox = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 280, CARD_W - INNER_PAD * 2, 100)];
+    [rc addSubview:_recordListBox];
+    [self ykRefreshRecordList];
+
+    _recordScroll.contentSize = CGSizeMake(_W, 1020);
 }
 
 #pragma mark - 底部导航（悬浮胶囊 + 选中态高亮）
@@ -519,6 +615,280 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     }
 }
 
+
+#pragma mark - 交互动作
+
+- (UIViewController *)ykHost {
+    UIWindow *win = nil;
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *sc in [UIApplication sharedApplication].connectedScenes) {
+            if ([sc isKindOfClass:[UIWindowScene class]]) {
+                for (UIWindow *w in ((UIWindowScene *)sc).windows) {
+                    if (w.isKeyWindow) { win = w; break; }
+                }
+            }
+            if (win) break;
+        }
+    }
+    if (!win) win = [UIApplication sharedApplication].keyWindow;
+    UIViewController *vc = win.rootViewController;
+    while (vc.presentedViewController) vc = vc.presentedViewController;
+    return vc;
+}
+
+- (void)ykSwitchChanged:(UISwitch *)sw {
+    if (sw == _svcSwitch) {
+        [[NSUserDefaults standardUserDefaults] setBool:sw.on forKey:YK_DEF_SERVICE];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        YKSetServiceEnabled(sw.on);
+    } else if (sw == _wanSwitch) {
+        [[NSUserDefaults standardUserDefaults] setBool:sw.on forKey:YK_DEF_WAN];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        // Lite 无中继隧道：仅记录开关状态（与原版开关行为对齐）
+    }
+}
+
+- (void)ykToggleService:(UISwitch *)sw { [self ykSwitchChanged:sw]; }
+- (void)ykToggleWAN:(UISwitch *)sw { [self ykSwitchChanged:sw]; }
+
+- (void)ykRename {
+    __weak typeof(self) ws = self;
+    YKAlertRename([self ykHost], _lblDeviceName.text, ^(NSString *name) {
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        sf->_lblDeviceName.text = name;
+        [[NSUserDefaults standardUserDefaults] setObject:name forKey:YK_DEF_NAME];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    });
+}
+
+- (void)ykCopyID {
+    NSString *sid = _lblDeviceID.text ?: @"";
+    [UIPasteboard generalPasteboard].string = sid;
+    UIImpactFeedbackGenerator *g = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [g impactOccurred];
+}
+
+- (void)ykScanConnect {
+    __weak typeof(self) ws = self;
+    YKPresentScan([self ykHost], NO, @"扫一扫连接设备", ^(NSString *code) {
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        YKAlert(sf.ykHost, @"已识别二维码", code, @[@"好"], nil);
+    });
+}
+
+- (void)ykAddScript {
+    __weak typeof(self) ws = self;
+    YKPresentScan([self ykHost], YES, @"添加脚本", ^(NSString *code) {
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        NSMutableArray *list = [[[NSUserDefaults standardUserDefaults] arrayForKey:YK_DEF_SCRIPTS] mutableCopy];
+        if (!list) list = [NSMutableArray array];
+        [list addObject:@{ @"code": code ?: @"",
+                           @"name": [NSString stringWithFormat:@"脚本 %lu", (unsigned long)list.count + 1],
+                           @"addedAt": @([[NSDate date] timeIntervalSince1970]) }];
+        [[NSUserDefaults standardUserDefaults] setObject:list forKey:YK_DEF_SCRIPTS];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        [sf ykReloadScripts];
+        YKAlert(sf.ykHost, @"已添加脚本", code, @[@"好"], nil);
+    });
+}
+
+- (void)ykRestartUserspace {
+    YKAlertRestart([self ykHost], ^{
+        YKRequestRestartUserspace();
+    });
+}
+
+#pragma mark - 录制
+
+- (void)ykRefreshRecordList {
+    if (!_recordListBox) return;
+    for (UIView *v in _recordListBox.subviews) [v removeFromSuperview];
+
+    NSArray *recs = nil;
+    NSURL *u = [NSURL URLWithString:@"http://127.0.0.1:65325/record/list"];
+    NSData *d = [NSData dataWithContentsOfURL:u];
+    if (d) {
+        NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL];
+        recs = j[@"value"][@"records"];
+    }
+    if (![recs isKindOfClass:[NSArray class]]) recs = @[];
+
+    CGFloat w = _recordListBox.bounds.size.width;
+    if (!recs.count) {
+        UIView *empty = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 54)];
+        empty.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1.0];
+        empty.layer.cornerRadius = 10.0;
+        [_recordListBox addSubview:empty];
+        UILabel *l = [self ykLabel:@"还没有录制脚本" size:13 bold:NO color:YkSub()];
+        l.textAlignment = NSTextAlignmentCenter;
+        l.frame = CGRectMake(0, 18, w, 18);
+        [empty addSubview:l];
+        return;
+    }
+
+    CGFloat y = 0;
+    for (NSDictionary *r in recs) {
+        UIView *row = [[UIView alloc] initWithFrame:CGRectMake(0, y, w, 84)];
+        row.backgroundColor = [UIColor colorWithWhite(0.975 alpha:1.0)];
+        row.layer.cornerRadius = 10.0;
+        [_recordListBox addSubview:row];
+
+        [row addSubview:[self ykIconBox:CGRectMake(8, 20, 44, 44)
+                                 symbol:@"record.circle" tint:YkRed() glyph:22]];
+        UILabel *name = [self ykLabel:(r[@"name"] ?: @"未命名") size:15 bold:YES color:YkMain()];
+        name.frame = CGRectMake(62, 12, 120, 18); [row addSubview:name];
+
+        NSNumber *dur = r[@"duration"] ?: @0;
+        NSNumber *cnt = r[@"count"] ?: @0;
+        UILabel *meta = [self ykLabel:[NSString stringWithFormat:@"%.1fs · %@ 事件",
+                                       dur.doubleValue, cnt] size:11 bold:NO color:YkSub()];
+        meta.frame = CGRectMake(62, 32, 130, 16); [row addSubview:meta];
+
+        UIButton *play = [UIButton buttonWithType:UIButtonTypeSystem];
+        play.frame = CGRectMake(w - 132, 22, 60, 40);
+        [play setTitle:@"回放" forState:UIControlStateNormal];
+        play.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+        play.backgroundColor = [YkBlue() colorWithAlphaComponent:0.12];
+        play.layer.cornerRadius = 10;
+        [play setTitleColor:YkBlue() forState:UIControlStateNormal];
+        play.accessibilityIdentifier = r[@"id"];
+        [play addTarget:self action:@selector(ykPlayRecord:) forControlEvents:UIControlEventTouchUpInside];
+        [row addSubview:play];
+
+        UIButton *del = [UIButton buttonWithType:UIButtonTypeSystem];
+        del.frame = CGRectMake(w - 66, 22, 60, 40);
+        [del setTitle:@"删除" forState:UIControlStateNormal];
+        del.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+        del.backgroundColor = [YkRed() colorWithAlphaComponent:0.10];
+        del.layer.cornerRadius = 10;
+        [del setTitleColor:YkRed() forState:UIControlStateNormal];
+        del.accessibilityIdentifier = r[@"id"];
+        [del addTarget:self action:@selector(ykDeleteRecord:) forControlEvents:UIControlEventTouchUpInside];
+        [row addSubview:del];
+
+        y += 92;
+    }
+    CGRect f = _recordListBox.frame;
+    f.size.height = MAX(54, y);
+    _recordListBox.frame = f;
+}
+
+- (void)ykPlayRecord:(UIButton *)b {
+    NSString *rid = b.accessibilityIdentifier;
+    __weak typeof(self) ws = self;
+    YKAlert([self ykHost], @"选择回放次数", nil,
+            @[@"1 次", @"3 次", @"10 次"], ^(NSInteger i) {
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        int times = (i == 0) ? 1 : (i == 1 ? 3 : 10);
+        NSDictionary *body = @{ @"id": rid ?: @"" , @"times": @(times), @"delayMs": @(1800) };
+        NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+        NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
+            [NSURL URLWithString:@"http://127.0.0.1:65325/record/play"]];
+        r.HTTPMethod = @"POST"; r.HTTPBody = d;
+        [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+        [[[NSURLSession sharedSession] dataTaskWithRequest:r completionHandler:nil] resume];
+        // 回放前退到桌面（与原版一致）
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [[UIApplication sharedApplication] performSelector:@selector(suspend)];
+        });
+    });
+}
+
+- (void)ykDeleteRecord:(UIButton *)b {
+    NSString *rid = b.accessibilityIdentifier ?: @"";
+    NSDictionary *body = @{ @"id": rid };
+    NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+    NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
+        [NSURL URLWithString:@"http://127.0.0.1:65325/record/remove"]];
+    r.HTTPMethod = @"POST"; r.HTTPBody = d;
+    [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [[[NSURLSession sharedSession] dataTaskWithRequest:r
+        completionHandler:^(NSData *x, NSURLResponse *y, NSError *e) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self ykRefreshRecordList]; });
+    }] resume];
+}
+
+- (void)ykOpenRecordBall {
+    if (_ballView) return;
+    CGFloat W = _W, H = _H;
+    _ballView = [[UIView alloc] initWithFrame:CGRectMake(W - 88, H * 0.45, 56, 56)];
+    _ballView.backgroundColor = [UIColor colorWithRed:1.0 green:0.23 blue:0.19 alpha:1.0];
+    _ballView.layer.cornerRadius = 28;
+    _ballView.layer.shadowColor = [UIColor blackColor].CGColor;
+    _ballView.layer.shadowOpacity = 0.35;
+    _ballView.layer.shadowRadius = 10;
+    _ballView.layer.shadowOffset = CGSizeMake(0, 4);
+    [self addSubview:_ballView];
+
+    _ballLabel = [[UILabel alloc] initWithFrame:_ballView.bounds];
+    _ballLabel.text = @"●";
+    _ballLabel.textAlignment = NSTextAlignmentCenter;
+    _ballLabel.textColor = [UIColor whiteColor];
+    _ballLabel.font = [UIFont systemFontOfSize:26];
+    _ballLabel.userInteractionEnabled = NO;
+    [_ballView addSubview:_ballLabel];
+
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(ykBallPan:)];
+    [_ballView addGestureRecognizer:pan];
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(ykBallTap:)];
+    [_ballView addGestureRecognizer:tap];
+
+    UIControl *mask = [[UIControl alloc] initWithFrame:CGRectMake(0, NAV_H, W, H - NAV_H - 68)];
+    mask.backgroundColor = [UIColor colorWithWhite:0 alpha:0.02];
+    mask.tag = 9911;
+    [mask addTarget:self action:@selector(ykRecordTouch:) forControlEvents:UIControlEventTouchDown];
+    [self insertSubview:mask belowSubview:_ballView];
+
+    _ballSteps = [NSMutableArray array];
+    _ballRecording = NO;
+}
+
+- (void)ykBallPan:(UIPanGestureRecognizer *)g {
+    CGPoint p = [g translationInView:self];
+    CGPoint c = _ballView.center;
+    _ballView.center = CGPointMake(c.x + p.x, c.y + p.y);
+    [g setTranslation:CGPointZero inView:self];
+}
+
+- (void)ykBallTap:(UITapGestureRecognizer *)g {
+    __weak typeof(self) ws = self;
+    if (!_ballRecording) {
+        _ballRecording = YES;
+        _ballStartAt = [NSDate date].timeIntervalSince1970;
+        [self bringSubviewToFront:_ballView];
+        YKAlert([self ykHost], @"开始录制", @"操作会被记录，点小球可结束并保存。",
+                @[@"好"], nil);
+    } else {
+        _ballRecording = NO;
+        NSArray *steps = [_ballSteps copy];
+        NSTimeInterval dur = [NSDate date].timeIntervalSince1970 - _ballStartAt;
+        [_ballView removeFromSuperview]; _ballView = nil;
+        [[self viewWithTag:9911] removeFromSuperview];
+        if (!steps.count) return;
+        NSDictionary *body = @{ @"name": [NSString stringWithFormat:@"录制 %@",
+                                          [[NSDateFormatter new] stringFromDate:[NSDate date]] ?: @""],
+                                @"steps": steps, @"duration": @(dur) };
+        NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+        NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
+            [NSURL URLWithString:@"http://127.0.0.1:65325/record/save"]];
+        r.HTTPMethod = @"POST"; r.HTTPBody = d;
+        [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+        [[[NSURLSession sharedSession] dataTaskWithRequest:r
+            completionHandler:^(NSData *x, NSURLResponse *y, NSError *e) {
+            dispatch_async(dispatch_get_main_queue(), ^{ [ws ykRefreshRecordList]; });
+        }] resume];
+    }
+}
+
+- (void)ykRecordTouch:(UIControl *)c {
+    if (!_ballRecording) return;
+    CGPoint p = [c convertPoint:CGPointZero toView:self];
+    NSTimeInterval t = [NSDate date].timeIntervalSince1970 - _ballStartAt;
+    [_ballSteps addObject:@{ @"x": @(p.x * 2), @"y": @(p.y * 2),
+                             @"touch": @1, @"delayMs": @( (int)(t * 0 ) + 30 ) }];
+}
+
 - (void)ykHTTP:(NSString *)path done:(void (^)(NSDictionary *))done {
     NSURL *u = [NSURL URLWithString:[@"http://127.0.0.1:65324" stringByAppendingString:path]];
     [[[NSURLSession sharedSession] dataTaskWithURL:u
@@ -529,22 +899,14 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
 }
 
 - (void)ykReloadScripts {
-    __weak typeof(self) ws = self;
-    [self ykHTTP:@"/health" done:^(NSDictionary *j) {
-        __strong typeof(ws) sf = ws; if (!sf) return;
-        BOOL ready = [j[@"value"][@"ready"] boolValue];
-        sf.lblHttpStatus.text = ready ? @"已开启" : @"已关闭";
-        sf.lblHttpStatus.textColor = ready ? YkGreen() : [UIColor systemRedColor];
-        sf.lblState.text = ready ? @"就绪" : @"异常";
-        sf.lblPort.text = [NSString stringWithFormat:@"%@", j[@"value"][@"port"] ?: @"—"];
-    }];
-    [self ykHTTP:@"/executor/scripts" done:^(NSDictionary *j) {
-        __strong typeof(ws) sf = ws; if (!sf) return;
-        NSArray *list = j[@"value"][@"scripts"];
-        sf.lblScriptCount.text = list.count ? [NSString stringWithFormat:@"%lu", (unsigned long)list.count] : @"-";
-        sf.lblScriptEmpty.text = list.count ? [NSString stringWithFormat:@"共 %lu 个脚本", (unsigned long)list.count]
-                                            : @"暂无订阅脚本";
-    }];
+    NSArray *list = [[NSUserDefaults standardUserDefaults] arrayForKey:YK_DEF_SCRIPTS] ?: @[];
+    _lblScriptCount.text = list.count ? [NSString stringWithFormat:@"%lu", (unsigned long)list.count] : @"-";
+    _lblScriptEmpty.text = list.count ? [NSString stringWithFormat:@"共 %lu 个脚本", (unsigned long)list.count]
+                                      : @"暂无订阅脚本";
+    _lblHttpStatus.text = @"已开启";
+    _lblHttpStatus.textColor = YkGreen();
+    _lblState.text = @"就绪";
+    _lblPort.text = @"65324";
 }
 
 - (void)ykShowPageObj:(id)o {
