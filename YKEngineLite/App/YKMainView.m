@@ -1110,4 +1110,3 @@ extern NSString *YKEnginePort(void);
 }
 
 @end
-    [self ykInstallDebugHook];
