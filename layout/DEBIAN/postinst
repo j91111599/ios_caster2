@@ -1,0 +1,25 @@
+#!/bin/sh
+# 安装后：注册 App 图标（uicache）+ 重启引擎 daemon（KeepAlive 会拉起新二进制）
+set +e
+LOG=/var/mobile/Media/yk_postinst.log
+JB=$(ls -d /var/containers/Bundle/Application/.jbroot-* 2>/dev/null | head -1)
+[ -z "$JB" ] && JB=/var/jb
+
+echo "[postinst] $(date) JB=$JB" >> "$LOG"
+
+if [ -x "$JB/usr/bin/uicache" ]; then
+    "$JB/usr/bin/uicache" -a >> "$LOG" 2>&1
+else
+    uicache -a >> "$LOG" 2>&1
+fi
+echo "[postinst] uicache rc=$?" >> "$LOG"
+
+# 让新二进制生效：杀掉旧 daemon，launchd KeepAlive 会重启
+if [ -x "$JB/usr/bin/killall" ]; then
+    "$JB/usr/bin/killall" -9 ykenginelite >> "$LOG" 2>&1
+    sleep 1
+    "$JB/usr/bin/launchctl" kickstart -k system/com.yk.enginelite >> "$LOG" 2>&1
+fi
+echo "[postinst] done" >> "$LOG"
+
+exit 0
