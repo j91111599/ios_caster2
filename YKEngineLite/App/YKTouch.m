@@ -261,6 +261,17 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
         }
         fprintf(stderr, "[touch] finger nx=%.3f ny=%.3f touch=%d\n", nx, ny, touch); fflush(stderr);
         if (fa) ((YkAppendFn)fa)(hand, fingerEv, 0);
+        // append 后用父事件的 range=0 覆盖了子事件，这里补回
+        {
+            void *fsi2 = YkSym("IOHIDEventSetIntegerValue");
+            if (fsi2) {
+                int r2 = (phase == 2) ? 0 : 1;
+                ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi2)(fingerEv, 0xB0008, r2);
+                ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi2)(fingerEv, 0xB0009, touch);
+                fprintf(stderr, "[touch] child range=%d touch=%d
+", r2, touch); fflush(stderr);
+            }
+        }
         fprintf(stderr, "[touch] step5 appended\n"); fflush(stderr);
         CFRelease(fingerEv);
     }
