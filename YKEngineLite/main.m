@@ -230,13 +230,21 @@ static NSString *YkShellPath(void) {
     return cached;
 }
 
-static void YkRunCmd(NSString *cmd) {
+static int gYkLastSpawnRC = 0;
+static int YkRunCmd(NSString *cmd) {
     NSString *sh = YkShellPath();
-    if (!sh) return;
+    if (!sh) { gYkLastSpawnRC = -999; return -999; }
     pid_t pid = 0;
     char *argv[] = { (char *)sh.UTF8String, (char *)"-c", (char *)cmd.UTF8String, NULL };
-    posix_spawn(&pid, sh.UTF8String, NULL, NULL, argv, environ);
+    extern char **environ;
+    int rc = posix_spawn(&pid, sh.UTF8String, NULL, NULL, argv, environ);
+    if (rc != 0) {
+        rc = posix_spawn(&pid, sh.UTF8String, NULL, NULL, argv, NULL);
+        if (rc == 0) gYkLastSpawnRC = 1000;
+    }
+    gYkLastSpawnRC = (rc == 0) ? (gYkLastSpawnRC == 1000 ? 1000 : 0) : rc;
     if (pid > 0) { int st = 0; waitpid(pid, &st, 0); }
+    return gYkLastSpawnRC;
 }
 
 static uint16_t YKListenPort(void) {
@@ -468,7 +476,8 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
             return @{ @"value": @{ @"output": out, @"exitCode": @0,
                                    @"sh": sh ?: @"<nil>", @"root": root,
                                    @"outFile": @([[NSFileManager defaultManager]
-                                                 fileExistsAtPath:outPath]) } };
+                                                 fileExistsAtPath:outPath]),
+                                   @"spawnRC": @(gYkLastSpawnRC) } };
         }
         if ([verb isEqualToString:@"service"]) {
             if (body[@"on"] != nil) {
