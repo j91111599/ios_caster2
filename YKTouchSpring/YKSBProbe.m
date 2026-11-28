@@ -33,16 +33,33 @@ static void *Sym(NSString *n) {
     return p;
 }
 
-static void SBMHIDCallback(void *t, void *r, void *s, void *e) {
+static void SBMHIDCallback(void *tt, void *r, void *s, void *e) {
     if (!e) return;
     void *ft = Sym(@"IOHIDEventGetType");
     uint32_t ty = ft ? ((uint32_t (*)(void *))ft)(e) : 0;
     if (ty == 11) {
-        void *fs = Sym(@"IOHIDEventGetSenderID");
+        void *fs  = Sym(@"IOHIDEventGetSenderID");
+        void *fi  = Sym(@"IOHIDEventGetIntegerValue");
+        void *ff2 = Sym(@"IOHIDEventGetFloatValue");
         uint64_t sid = fs ? ((uint64_t (*)(void *))fs)(e) : 0;
-        SBLog(@"HIDMON type=11 sender=%llu", (unsigned long long)sid);
+        long mask = 0, rng = 0, tch = 0, idx = 0, ident = 0, disp = 0;
+        double x = 0, y = 0;
+        if (fi) {
+            mask  = (long)((int64_t (*)(void *, uint32_t))fi)(e, 0xB0007);
+            rng   = (long)((int64_t (*)(void *, uint32_t))fi)(e, 0xB0008);
+            tch   = (long)((int64_t (*)(void *, uint32_t))fi)(e, 0xB0009);
+            idx   = (long)((int64_t (*)(void *, uint32_t))fi)(e, 0xB0005);
+            ident = (long)((int64_t (*)(void *, uint32_t))fi)(e, 0xB0006);
+            disp  = (long)((int64_t (*)(void *, uint32_t))fi)(e, 0xB0019);
+        }
+        if (ff2) {
+            x = ((double (*)(void *, uint32_t))ff2)(e, 0xB0000);
+            y = ((double (*)(void *, uint32_t))ff2)(e, 0xB0001);
+        }
+        SBLog(@"HIDMON t11 sid=%llu mask=%ld range=%ld touch=%ld idx=%ld ident=%ld disp=%ld x=%.1f y=%.1f",
+              (unsigned long long)sid, mask, rng, tch, idx, ident, disp, x, y);
     }
-    (void)t; (void)r; (void)s;
+    (void)tt; (void)r; (void)s;
 }
 
 typedef void (*GenericFn)(id, SEL, id);

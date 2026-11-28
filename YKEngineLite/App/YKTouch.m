@@ -210,7 +210,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     else if (phase == 3)    mask = 4;
     else                    mask = 1;   // up: Range，让系统识别为 Ended
     int      touch = (phase == 2) ? 0 : 1;
-    int      range = (phase == 2) ? 0 : 1;   // up 时 range=0
+    int      range = 1;   // 固定 1（range=0 会让事件失效）
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
     // 父事件：transducerType = 3 (Hand)
