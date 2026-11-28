@@ -49,17 +49,41 @@ static void *YkSym(const char *name) {
 
 // 原版 startTouchHIDEventMonitorIfNeeded：先注册回调，让 client 成为"活跃事件源"
 static uint64_t gYkLastRealSender = 0;
+static uint32_t gYkLastRealType   = 0;
+static uint32_t gYkLastRealMask   = 0;
+static uint32_t gYkLastRealIndex  = 0;
+static uint32_t gYkLastRealIdent  = 0;
+static double   gYkLastRealX = 0, gYkLastRealY = 0;
+static volatile int gYkRealCount = 0;
+
 static void YkHIDEventCallback(void *target, void *refcon, void *service, IOHIDEventRef event) {
-    // 目的不是处理事件，而是让 client 保持订阅状态
-    (void)target; (void)service;
-    if (event) {
-        void *fg = YkSym("IOHIDEventGetSenderID");
-        if (fg) {
-            uint64_t sid = ((uint64_t (*)(IOHIDEventRef))fg)(event);
-            if (sid) gYkLastRealSender = sid;
-        }
+    (void)target; (void)refcon; (void)service;
+    if (!event) return;
+    void *ft = YkSym("IOHIDEventGetType");
+    void *fg = YkSym("IOHIDEventGetIntegerValue");
+    void *ff = YkSym("IOHIDEventGetFloatValue");
+    void *fs = YkSym("IOHIDEventGetSenderID");
+    if (!ft) return;
+    uint32_t t = ((uint32_t (*)(IOHIDEventRef))ft)(event);
+    if (t != 11) return;                      // 只要 digitizer
+
+    gYkRealCount++;
+    gYkLastRealType = t;
+    if (fs) gYkLastRealSender = ((uint64_t (*)(IOHIDEventRef))fs)(event);
+    if (fg) {
+        gYkLastRealIndex = (uint32_t)((int64_t (*)(IOHIDEventRef, uint32_t))fg)(event, 0xB0005);
+        gYkLastRealIdent = (uint32_t)((int64_t (*)(IOHIDEventRef, uint32_t))fg)(event, 0xB0006);
+        gYkLastRealMask  = (uint32_t)((int64_t (*)(IOHIDEventRef, uint32_t))fg)(event, 0xB0007);
     }
-    (void)refcon;
+    if (ff) {
+        gYkLastRealX = ((double (*)(IOHIDEventRef, uint32_t))ff)(event, 0xB0000);
+        gYkLastRealY = ((double (*)(IOHIDEventRef, uint32_t))ff)(event, 0xB0001);
+    }
+    fprintf(stderr, "[real] n=%d sender=%llu idx=%u ident=%u mask=%u x=%.1f y=%.1f\n",
+            gYkRealCount, (unsigned long long)gYkLastRealSender,
+            gYkLastRealIndex, gYkLastRealIdent, gYkLastRealMask,
+            gYkLastRealX, gYkLastRealY);
+    fflush(stderr);
 }
 
 static IOHIDEventSystemClientRef YkHIDClientMain(void) {
@@ -174,9 +198,11 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     // 原版 eventMaskFromEventInfo：按 phase 返回 0~4
     //   began->3(Range|Touch)  moved->4(Position)  ended->0
     uint32_t mask;
-    if (phase == 1)      mask = 3;   // began
-    else if (phase == 3) mask = 4;   // moved
-    else                 mask = 0;   // up / 其他
+    if (gYkUseCaptured && gYkLastRealMask) {
+        mask = gYkLastRealMask;      // 直接用真实事件的 mask
+    } else if (phase == 1)  mask = 3;
+    else if (phase == 3)    mask = 4;
+    else                    mask = 0;
     int      touch = (phase == 2) ? 0 : 1;
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
@@ -227,6 +253,11 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     void *fst = YkSym("IOHIDEventSetTimeStamp");
     if (fst) ((void (*)(IOHIDEventRef, uint64_t))fst)(hand, mach_absolute_time());
     if (gYkSenderID == 1) gYkSenderID = YkFindTouchSenderID();   // 1 = 自动探测
+    if (gYkSenderID == 2) {          // 2 = 使用捕获的真实 senderID
+        if (!gYkLastRealSender) gYkLastRealSender = YkFindTouchSenderID();
+        gYkSenderID = gYkLastRealSender;
+        gYkUseCaptured = 1;
+    }
     if (gYkSenderID && gYkSenderID != 1) {
         void *fsi = YkSym("IOHIDEventSetSenderID");
         if (fsi) ((void (*)(IOHIDEventRef, uint64_t))fsi)(hand, gYkSenderID);
@@ -405,4 +436,15 @@ NSDictionary *YkLoopbackTest(double x, double y) {
         @"monX": @(gYkMonX),
         @"monY": @(gYkMonY),
         @"sentX": @(x), @"sentY": @(y) } };
+}
+
+NSDictionary *YkTouchCaptureInfo(void) {
+    return @{ @"value": @{
+        @"count": @(gYkRealCount),
+        @"sender": @(gYkLastRealSender),
+        @"index": @(gYkLastRealIndex),
+        @"identity": @(gYkLastRealIdent),
+        @"mask": @(gYkLastRealMask),
+        @"x": @(gYkLastRealX),
+        @"y": @(gYkLastRealY) } };
 }
