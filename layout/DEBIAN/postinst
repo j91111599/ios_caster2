@@ -2,7 +2,8 @@
 # 安装后：注册 App 图标（uicache）+ 重启引擎 daemon（KeepAlive 会拉起新二进制）
 set +e
 LOG=/var/mobile/Media/yk_postinst.log
-JB=$(ls -d /var/containers/Bundle/Application/.jbroot-* 2>/dev/null | head -1)
+set -- /var/containers/Bundle/Application/.jbroot-*
+JB="$1"   # 不做外部命令调用（PATH 里可能没有 ls）
 [ -z "$JB" ] && JB=/var/jb
 
 echo "[postinst] $(date) JB=$JB" >> "$LOG"
