@@ -148,7 +148,12 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     if (!fp || !ff) return;
 
     uint64_t ts = mach_absolute_time();
-    uint32_t mask  = 2;                        // kIOHIDDigitizerEventTouch
+    // 原版 eventMaskFromEventInfo：按 phase 返回 0~4
+    //   began->3(Range|Touch)  moved->4(Position)  ended->0
+    uint32_t mask;
+    if (phase == 1)      mask = 3;   // began
+    else if (phase == 3) mask = 4;   // moved
+    else                 mask = 0;   // up / 其他
     int      touch = (phase == 2) ? 0 : 1;
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
@@ -246,9 +251,12 @@ static uint64_t YkNow(void) {
 NSDictionary *YkTouchTap(double x, double y) {
     NSDictionary *r = YkPortSend(@{ @"action": @"tap", @"x": @(x), @"y": @(y) });
     if (r) return @{ @"value": r };
-    YkFingerEvent(1, x, y, 1.0, YkNow());
-    usleep(30000);
-    YkFingerEvent(2, x, y, 0.0, YkNow());
+    // 原版序列：began -> moved(位置微移) -> ended
+    YkFingerEvent(1, x,        y,        1.0, YkNow());
+    usleep(20000);
+    YkFingerEvent(3, x + 0.5,  y + 0.5,  1.0, YkNow());
+    usleep(20000);
+    YkFingerEvent(2, x + 0.5,  y + 0.5,  0.0, YkNow());
     return @{ @"value": @{ @"action": @"tap", @"x": @(x), @"y": @(y), @"sent": @(YkHIDClient() != NULL) } };
 }
 
