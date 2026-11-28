@@ -79,6 +79,8 @@ extern NSString *YKEnginePort(void);
     UIImageView *_navLeftIcon;
     UIButton *_navRightBtn;
     UISwitch *_svcSwitch;
+    UIView *_svcRow;
+    UIView *_wanRow;
     UISwitch *_wanSwitch;
     UILabel *_lblDeviceName;
     UILabel *_lblDeviceID;
@@ -271,8 +273,8 @@ extern NSString *YKEnginePort(void);
             [sw addTarget:self action:@selector(ykSwitchChanged:)
                 forControlEvents:UIControlEventValueChanged];
             [row addSubview:sw];
-            if (i == 0) _svcSwitch = sw;
-            if (i == 1) _wanSwitch = sw;
+            if (i == 0) { _svcSwitch = sw; _svcRow = row; }
+            if (i == 1) { _wanSwitch = sw; _wanRow = row; }
         } else {
             UILabel *pill = [self ykLabel:@"待接入" size:12 bold:NO color:YkSub()];
             pill.textAlignment = NSTextAlignmentRight;
@@ -643,6 +645,7 @@ extern NSString *YKEnginePort(void);
         [[NSUserDefaults standardUserDefaults] setBool:sw.on forKey:YK_DEF_SERVICE];
         [[NSUserDefaults standardUserDefaults] synchronize];
         YKSetServiceEnabled(sw.on);
+        [self ykStyleRow:_svcRow on:sw.on];
         NSString *flag = @"/var/mobile/Library/YKEngineLite/service.on";
         [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/YKEngineLite"
                                   withIntermediateDirectories:YES attributes:nil error:NULL];
@@ -659,8 +662,17 @@ extern NSString *YKEnginePort(void);
     } else if (sw == _wanSwitch) {
         [[NSUserDefaults standardUserDefaults] setBool:sw.on forKey:YK_DEF_WAN];
         [[NSUserDefaults standardUserDefaults] synchronize];
+        [self ykStyleRow:_wanRow on:sw.on];
         // Lite 无中继隧道：仅记录开关状态（与原版开关行为对齐）
     }
+}
+
+
+- (void)ykStyleRow:(UIView *)row on:(BOOL)on {
+    if (!row) return;
+    row.backgroundColor = on ? [YkBlue() colorWithAlphaComponent:0.06] : [UIColor whiteColor];
+    row.layer.borderColor = (on ? [YkBlue() colorWithAlphaComponent:0.18]
+                                : [UIColor colorWithWhite:0.93 alpha:1.0]).CGColor;
 }
 
 - (void)ykToggleService:(UISwitch *)sw { [self ykSwitchChanged:sw]; }
