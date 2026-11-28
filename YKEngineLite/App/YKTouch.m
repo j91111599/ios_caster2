@@ -69,6 +69,7 @@ static void YkHIDEventCallback(void *target, void *refcon, void *service, IOHIDE
     if (!ft) return;
     uint32_t t = ((uint32_t (*)(IOHIDEventRef))ft)(event);
     if (t != 11) return;                      // 只要 digitizer
+    YkTryRecordEvent(event);
 
     gYkRealCount++;
     gYkLastRealType = t;
@@ -486,3 +487,83 @@ NSDictionary *YkTouchCaptureInfo(void) {
         @"y": @(gYkLastRealY) } };
 }
 
+
+#pragma mark - 录制 / 回放（复刻原版 YKEventRecord + YKPointRadius）
+
+static volatile int  gYkRecArmed = 0;
+static NSData       *gYkRecBlob  = nil;      // 录制到的真实事件序列化数据
+static double        gYkRecX = 0, gYkRecY = 0;
+
+// 在已有 monitor 回调里调用（YkHIDEventCallback 处理 type==11 时）
+static void YkTryRecordEvent(IOHIDEventRef event) {
+    if (!gYkRecArmed || gYkRecBlob) return;
+    void *fcd = YkSym("IOHIDEventCreateData");
+    void *ff  = YkSym("IOHIDEventGetFloatValue");
+    if (!fcd) return;
+    CFDataRef d = ((CFDataRef (*)(CFAllocatorRef, IOHIDEventRef))fcd)(kCFAllocatorDefault, event);
+    if (!d) return;
+    NSData *nd = (__bridge_transfer NSData *)d;
+    if (nd.length > 32) {
+        gYkRecBlob = nd;
+        if (ff) {
+            gYkRecX = ((double (*)(IOHIDEventRef, uint32_t))ff)(event, 0xB0000);
+            gYkRecY = ((double (*)(IOHIDEventRef, uint32_t))ff)(event, 0xB0001);
+        }
+        fprintf(stderr, "[touch] RECORDED len=%lu x=%.3f y=%.3f\n",
+                (unsigned long)nd.length, gYkRecX, gYkRecY);
+        fflush(stderr);
+        // 落盘备份
+        [nd writeToFile:@"/var/mobile/Media/yk_touch_seed.bin" atomically:YES];
+    }
+}
+
+NSDictionary *YkRecordArm(void) {
+    gYkRecBlob = nil;
+    gYkRecArmed = 1;
+    // 确保 monitor 已注册
+    YkHIDClient();
+    return @{ @"value": @{ @"armed": @YES } };
+}
+
+NSDictionary *YkRecordStatus(void) {
+    return @{ @"value": @{ @"armed": @(gYkRecArmed),
+                           @"recorded": @(gYkRecBlob != nil),
+                           @"len": @(gYkRecBlob.length),
+                           @"x": @(gYkRecX), @"y": @(gYkRecY) } };
+}
+
+// 回放：反序列化 → 改坐标 → 派发
+NSDictionary *YkReplayAt(double x, double y) {
+    NSData *blob = gYkRecBlob;
+    if (!blob) blob = [NSData dataWithContentsOfFile:@"/var/mobile/Media/yk_touch_seed.bin"];
+    if (!blob) return @{ @"value": @{ @"error": @"no_seed" } };
+
+    void *fw  = YkSym("IOHIDEventCreateWithData");
+    void *hdc = YkSym("IOHIDEventSystemClientDispatchEvent");
+    void *fsf = YkSym("IOHIDEventSetFloatValue");
+    void *fss = YkSym("IOHIDEventSetSenderID");
+    if (!fw || !hdc) return @{ @"value": @{ @"error": @"no_sym" } };
+
+    // 归一化
+    CGSize scr = [UIScreen mainScreen].bounds.size;
+    double sc = [UIScreen mainScreen].scale;
+    double nx = x / (scr.width * sc), ny = y / (scr.height * sc);
+
+    IOHIDEventRef ev = ((IOHIDEventRef (*)(CFAllocatorRef, CFDataRef, int, int))fw)(
+                        kCFAllocatorDefault, (__bridge CFDataRef)blob, 1, 0);
+    if (!ev) return @{ @"value": @{ @"error": @"deserialize_failed" } };
+
+    if (fsf) {
+        ((void (*)(IOHIDEventRef, uint32_t, double))fsf)(ev, 0xB0000, nx);
+        ((void (*)(IOHIDEventRef, uint32_t, double))fsf)(ev, 0xB0001, ny);
+    }
+    if (fss && gYkSenderID) ((void (*)(IOHIDEventRef, uint64_t))fss)(ev, gYkSenderID);
+
+    IOHIDEventSystemClientRef cl = YkHIDClient();
+    if (cl) ((void (*)(IOHIDEventSystemClientRef, IOHIDEventRef))hdc)(cl, ev);
+    CFRelease(ev);
+    fprintf(stderr, "[touch] REPLAY len=%lu nx=%.3f ny=%.3f\n",
+            (unsigned long)blob.length, nx, ny); fflush(stderr);
+    return @{ @"value": @{ @"replayed": @YES, @"len": @(blob.length),
+                           @"nx": @(nx), @"ny": @(ny) } };
+}
