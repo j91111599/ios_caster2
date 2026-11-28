@@ -534,7 +534,7 @@ NSDictionary *YkRecordStatus(void) {
 }
 
 // 回放：反序列化 → 改坐标 → 派发
-NSDictionary *YkReplayAt(double x, double y) {
+NSDictionary *YkReplayAtRaw(double x, double y, int raw) {
     NSData *blob = gYkRecBlob;
     if (!blob) blob = [NSData dataWithContentsOfFile:@"/var/mobile/Media/yk_touch_seed.bin"];
     if (!blob) return @{ @"value": @{ @"error": @"no_seed" } };
@@ -554,11 +554,13 @@ NSDictionary *YkReplayAt(double x, double y) {
                         kCFAllocatorDefault, (__bridge CFDataRef)blob, 1, 0);
     if (!ev) return @{ @"value": @{ @"error": @"deserialize_failed" } };
 
-    if (fsf) {
-        ((void (*)(IOHIDEventRef, uint32_t, double))fsf)(ev, 0xB0000, nx);
-        ((void (*)(IOHIDEventRef, uint32_t, double))fsf)(ev, 0xB0001, ny);
+    if (!raw) {
+        if (fsf) {
+            ((void (*)(IOHIDEventRef, uint32_t, double))fsf)(ev, 0xB0000, nx);
+            ((void (*)(IOHIDEventRef, uint32_t, double))fsf)(ev, 0xB0001, ny);
+        }
+        if (fss && gYkSenderID) ((void (*)(IOHIDEventRef, uint64_t))fss)(ev, gYkSenderID);
     }
-    if (fss && gYkSenderID) ((void (*)(IOHIDEventRef, uint64_t))fss)(ev, gYkSenderID);
 
     IOHIDEventSystemClientRef cl = YkHIDClient();
     if (cl) ((void (*)(IOHIDEventSystemClientRef, IOHIDEventRef))hdc)(cl, ev);

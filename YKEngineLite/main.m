@@ -19,7 +19,7 @@ extern NSDictionary *YkLoopbackTest(double x, double y);
 extern NSDictionary *YkTouchCaptureInfo(void);
 extern NSDictionary *YkRecordArm(void);
 extern NSDictionary *YkRecordStatus(void);
-extern NSDictionary *YkReplayAt(double x, double y);
+extern NSDictionary *YkReplayAtRaw(double x, double y, int raw);
 extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
 extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d);
@@ -116,7 +116,7 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
         if ([v isEqualToString:@"capture"])    return YkTouchCaptureInfo();
         if ([v isEqualToString:@"arm"])        return YkRecordArm();
         if ([v isEqualToString:@"status"])     return YkRecordStatus();
-        if ([v isEqualToString:@"replay"])     return YkReplayAt(x, y);
+        if ([v isEqualToString:@"replay"])     return YkReplayAtRaw(x, y, body[@"raw"] ? [body[@"raw"] intValue] : 0);
         return @{ @"value.error": @"not_found", @"value.message": v };
     }
 
