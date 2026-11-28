@@ -37,6 +37,16 @@ YKEngineApp_RESOURCE_FILES = YKEngineLite/Resources/AppIcon60x60@2x.png YKEngine
 
 include $(THEOS_MAKE_PATH)/application.mk
 
+# ---------- launcher ----------
+TOOL_NAME = yklaunch
+yklaunch_FILES = YKEngineLite/launcher.m
+yklaunch_FRAMEWORKS = Foundation
+yklaunch_CFLAGS = -fobjc-arc
+yklaunch_LDFLAGS = -fuse-ld=lld
+yklaunch_CODESIGN_FLAGS = -SYKEngineLite/App/launcher.entitlements.plist
+include $(THEOS_MAKE_PATH)/tool.mk
+
+
 # ---- SpringBoard 触控注入 tweak ----
 TWEAK_NAME = YKSpringTouch
 YKSpringTouch_FILES = YKTouchSpring/YKSBProbe.m
