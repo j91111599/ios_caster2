@@ -100,9 +100,30 @@ void YkSetServiceRunning(BOOL on) {
 }
 
 
+
+// 关键：从自身可执行路径推导 jbroot（roothide 的 .jbroot-XXXX 每台机器不同，
+// 且 daemon 的 NSFileManager 看不到 /usr/bin 这类 jbroot 内路径）。
+static NSString *YkRootPath(void) {
+    static NSString *cached = nil;
+    if (cached) return cached;
+    NSString *exe = NSProcessInfo.processInfo.arguments.firstObject;
+    if (!exe.length) exe = NSBundle.mainBundle.executablePath;
+    // .../.jbroot-XXXX/usr/bin/ykenginelite -> .../.jbroot-XXXX
+    NSString *p1 = [exe stringByDeletingLastPathComponent];   // .../usr/bin
+    NSString *p2 = [p1 stringByDeletingLastPathComponent];    // .../usr
+    NSString *p3 = [p2 stringByDeletingLastPathComponent];    // .../.jbroot-XXXX
+    if ([p3 containsString:@".jbroot-"]) cached = p3;
+    return cached;
+}
+
 // 在 jbroot / 常见前缀里找一个可执行文件（rootless/roothide 路径不固定）
 static NSString *YkFindTool(NSString *name) {
     NSMutableArray *c = [NSMutableArray array];
+    NSString *R = YkRootPath();
+    if (R) {
+        [c addObject:[R stringByAppendingPathComponent:[NSString stringWithFormat:@"usr/bin/%@", name]]];
+        [c addObject:[R stringByAppendingPathComponent:[NSString stringWithFormat:@"usr/sbin/%@", name]]];
+    }
     NSArray *roots = [[NSFileManager defaultManager]
                       contentsOfDirectoryAtPath:@"/var/containers/Bundle/Application" error:NULL];
     for (NSString *d in roots) {
@@ -143,6 +164,12 @@ static NSString *YkShellPath(void) {
     static NSString *cached = nil;
     if (cached) return cached;
     NSMutableArray *cands = [NSMutableArray array];
+    NSString *R = YkRootPath();
+    if (R) {
+        [cands addObject:[R stringByAppendingPathComponent:@"usr/bin/sh"]];
+        [cands addObject:[R stringByAppendingPathComponent:@"bin/sh"]];
+        [cands addObject:[R stringByAppendingPathComponent:@"usr/bin/bash"]];
+    }
     NSString *env = NSProcessInfo.processInfo.environment[@"YK_SHELL"];
     if (env.length) [cands addObject:env];
     NSArray *roots = [[NSFileManager defaultManager]
