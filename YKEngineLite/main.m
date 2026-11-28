@@ -90,6 +90,9 @@ static HTTPServer *gYKServiceServer = nil;
 static volatile int gYKServiceRunning = 1;
 
 
+static NSString *YkFindTool(NSString *name);
+static int YkSpawnWait(NSString *path, NSArray<NSString *> *args);
+
 // dpkg 装出来的 App，SpringBoard 不会自动把图标并进 IconState（LS 认识、桌面不显示）。
 // daemon 启动时补一次：缺就加一页，然后 respring。
 static void YkEnsureIcon(void) {
