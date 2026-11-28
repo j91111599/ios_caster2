@@ -11,7 +11,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>YK_HTTP_PORT</key>
-		<string>65325</string>
+		<string>65323</string>
 	</dict>
 	<key>RunAtLoad</key>
 	<true/>
