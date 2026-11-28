@@ -207,15 +207,19 @@ static uint64_t YkFindTouchSenderID(void) {
     return found;
 }
 
-// senderID 解析优先级：请求显式值 > 持久化值 > 服务枚举 > 原版硬编码常量
+// senderID 解析优先级：
+//   请求显式值(>1) > 已学习覆盖值(sender.txt) > 原版硬编码常量
+//   仅当请求显式传 sender=1 时才枚举服务（枚举到的第一个 digitizer 不一定是屏幕，
+//   原版自己也是硬编码这一个常量）。
 static uint64_t YkResolveSender(void) {
-    uint64_t v = gYkSenderID;
-    if (v == 1) v = YkFindTouchSenderID();
-    if (v <= 1) v = YkSenderLoad();
-    if (v <= 1) v = YkFindTouchSenderID();
-    if (v <= 1) v = YK_SENDER_DEFAULT;
-    YkSenderSave(v);
-    return v;
+    if (gYkSenderID > 1) return gYkSenderID;
+    if (gYkSenderID == 1) {
+        uint64_t v = YkFindTouchSenderID();
+        if (v > 1) { YkSenderSave(v); return v; }
+    }
+    uint64_t learned = YkSenderLoad();
+    if (learned > 1) return learned;
+    return YK_SENDER_DEFAULT;
 }
 
 static void YkSendEvent(IOHIDEventRef ev) {
@@ -296,9 +300,10 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     double ny = (scr.height > 0) ? y / (scr.height * [UIScreen mainScreen].scale) : y;
     if (nx > 1.0) nx = 1.0; if (ny > 1.0) ny = 1.0;
 
+    uint32_t fIdx = (finger <= 1) ? 2u : finger;   // 单指沿用实测的 2/2
     IOHIDEventRef fingerEv = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
-                                              2,            // index
-                                              2,            // identity
+                                              fIdx,         // index
+                                              fIdx,         // identity
                                               3,            // mask = Range|Touch
                                               0,
                                               nx, ny,       // 归一化坐标
@@ -665,7 +670,7 @@ static void YkTryRecordEvent(void *event) {
 void YkHIDBoot(void) {
     // 原版 YKService 在 init 里就创建 client，而不是懒加载
     IOHIDEventSystemClientRef c = YkHIDClient();
-    uint64_t sid = YkResolveSender();       // 启动即定下 senderID 并落盘
+    uint64_t sid = YkResolveSender();       // 启动即确定 senderID（不枚举、只读/回退常量）
     fprintf(stderr, "[touch] BOOT client=%p type=%d sender=%llu\n",
             (void *)c, gYkClientType, (unsigned long long)sid);
     fflush(stderr);

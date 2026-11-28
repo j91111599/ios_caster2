@@ -23,7 +23,7 @@ extern NSDictionary *YkRecordStatus(void);
 extern NSDictionary *YkReplayAtRaw(double x, double y, int raw);
 extern NSDictionary *YkTouchTap(double x, double y);
 extern NSDictionary *YkTouchLongPress(double x, double y, double d);
-extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d);
+extern NSDictionary *YkTouchSwipe(double x1, double y1, double x2, double y2, double d, NSInteger steps);
 extern NSDictionary *YkTouchHome(int count, double hold);
 extern NSDictionary *YkTouchDoubleTap(double x, double y, double gap);
 extern NSDictionary *YkTouchPinch(double x1, double y1, double ex1, double ey1,
@@ -118,7 +118,8 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
         if ([v isEqualToString:@"swipe"])      return YkTouchSwipe(x, y,
                                                    [body[@"toX"] doubleValue],
                                                    [body[@"toY"] doubleValue],
-                                                   [body[@"duration"] doubleValue]);
+                                                   [body[@"duration"] doubleValue],
+                                                   [body[@"steps"] integerValue] ?: 12);
         if ([v isEqualToString:@"doubleTap"])  return YkTouchDoubleTap(x, y, [body[@"gap"] doubleValue]);
         if ([v isEqualToString:@"home"])        return YkTouchHome(body[@"count"] ? [body[@"count"] intValue] : 1,
                                                                    [body[@"hold"] doubleValue]);

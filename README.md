@@ -175,6 +175,45 @@ IOSurface 取帧缓冲 → CGBitmapContext → JPEG（ImageIO 硬件编码）
 > 注意：`performSelector:withObject:` 传的是对象指针。方法参数若声明为 `NSInteger`
 > （基本类型）会收到对象地址值，导致判断错乱。参数必须用 `id` 再转。
 
+### 5.5 触控注入（2026-11-28 打通）
+
+链路（与原版 YKPointRadius / YKTouchesRadius 同构）：
+
+```
+IOHIDEventCreateDigitizerEvent      → 父事件（transducerType=3 Hand, mask=2）
+  + IOHIDEventCreateDigitizerFingerEvent → 子事件（mask=3, 归一化 x/y, range/touch）
+  → IOHIDEventAppendEvent           → 挂到父事件
+  → IOHIDEventSetIntegerValue(0x0B0019,1)  显示集成（坐标才映射屏幕）
+  → IOHIDEventSetIntegerValue(4,1) + SetSenderID(SID)
+  → IOHIDEventSystemClientDispatchEvent(client, event)
+```
+
+**关键约束：`senderID` 必须是真实触摸屏服务的 registry ID**（本机
+`0x8000000817319371`）。senderID 为 0 时 backboardd 照样转发、monitor 也收得到，
+但 SpringBoard 不把它派发给任何窗口 —— 表现为「注入成功但屏幕毫无反应」。
+
+sender 解析顺序：请求体 `sender` > `/var/mobile/Library/YKEngineLite/sender.txt`
+> 枚举 digitizer 服务 > 原版常量。**不要在每个请求里清 0**。
+
+Home 键走键盘事件：`IOHIDEventCreateKeyboardEvent(alloc, ts, 0x0C, 0x40, down, 0)`
+（page 0x0C / usage 0x40 = Consumer Menu），同样需要 SetSenderID。
+
+路由：
+
+| 路由 | 说明 |
+|---|---|
+| `POST /touch/tap` | 单击（down/up 两帧，60 ms） |
+| `POST /touch/doubleTap` | 双击（gap 默认 80 ms） |
+| `POST /touch/longPress` | 长按（`duration` 秒） |
+| `POST /touch/swipe` | 滑动（`toX/toY/duration/steps`） |
+| `POST /touch/pinch` | 双指捏合（`startPoints`/`endPoints` 各两点） |
+| `POST /touch/sequence` | 任意序列（`points:[{x,y,touch,finger,delayMs,type}]`） |
+| `POST /touch/home` | Home 键（`count`=2 即双击 Home，`hold` 秒数） |
+| `POST /touch/showTouches` | Lite 不含可视化层，返回 `supported:false` |
+| `POST /touch/ping` / `/touch/capture` / `/touch/arm` / `/touch/status` / `/touch/replay` | 诊断与录制回放 |
+
+坐标一律是**像素**（750×1334 设备就是 750×1334 空间），注入前才归一化到 0~1。
+
 ---
 
 ## 6. 权限与签名
