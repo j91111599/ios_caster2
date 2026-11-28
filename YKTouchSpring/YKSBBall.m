@@ -302,9 +302,17 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
 
 - (void)layoutMenu {
     CGRect f = _ball.frame;
-    _menu.center = CGPointMake(f.origin.x + 24, f.origin.y - 110);
-    if (_menu.center.y < 120) _menu.center = CGPointMake(f.origin.x + 24, f.origin.y + 110 + 48);
-    _hint.center = CGPointMake(_ball.center.x, _ball.center.y + 40);
+    CGFloat W = _win.bounds.size.width, H = _win.bounds.size.height;
+    CGFloat cx = f.origin.x + 24;
+    if (cx + 28 > W - 6) cx = W - 34;             // 靠右时贴边
+    CGFloat cy = f.origin.y - 110;
+    if (cy - 107 < 40) cy = f.origin.y + 110 + 48; // 顶部放不下就放下方
+    if (cy + 107 > H - 40) cy = H - 120;
+    _menu.center = CGPointMake(cx, cy);
+
+    CGFloat hw = _hint.bounds.size.width;
+    CGFloat hx = MAX(hw / 2 + 6, MIN(f.origin.x + 24, W - hw / 2 - 6));
+    _hint.center = CGPointMake(hx, f.origin.y + 62);
 }
 
 - (void)toggleMenu {
@@ -354,11 +362,11 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
 @end
 
 @implementation YKBallWindow
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    // 只有球/菜单区域吃掉触摸
-    YKBallController *c = [YKBallController shared];
-    (void)c;
-    return [super pointInside:point withEvent:event];
+// 关键：整窗 750x1334 覆盖桌面时不能吃掉普通点击，否则桌面/其它 App 全部失灵
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *v = [super hitTest:point withEvent:event];
+    if (v == self || v == self.rootViewController.view) return nil;
+    return v;
 }
 @end
 
