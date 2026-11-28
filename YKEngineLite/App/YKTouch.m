@@ -159,6 +159,15 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
                                              x, y, 0.0, press, 0.0, 1, touch, 0);
     fprintf(stderr, "[touch] step2 hand=%p\n", (void *)hand); fflush(stderr);
     if (!hand) return;
+    // 原版：hand 事件必须设置字段 4 = 1（键盘事件同样设置）
+    {
+        void *fsi = YkSym("IOHIDEventSetIntegerValue");
+        if (fsi) {
+            ((void (*)(IOHIDEventRef, uint32_t, int64_t))fsi)(hand, 4, 1);
+            fprintf(stderr, "[touch] set field4\n"); fflush(stderr);
+        }
+    }
+
 
     fprintf(stderr, "[touch] step3 before FingerEvent\n"); fflush(stderr);
     // 完全对齐原版 YKPointRadius.m 的写法：
