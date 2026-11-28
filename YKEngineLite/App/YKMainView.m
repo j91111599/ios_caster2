@@ -6,6 +6,8 @@
 //    脚本页：绿 #EAF6EE / 紫 #EFEDFB / 橙 #FEF3E6 / 品红 #F7EDFB
 //    录制页步骤：粉 #FDEEF0 / 蓝 #EAF2FE / 绿 #EAF7EE / 黄 #FEF6E6
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
+#import <CoreFoundation/CoreFoundation.h>
 
 static UIColor *YkBlue(void)    { return [UIColor colorWithRed:0.141 green:0.631 blue:0.945 alpha:1.0]; }
 static UIColor *YkPageBg(void)  { return [UIColor colorWithRed:0.965 green:0.961 blue:0.980 alpha:1.0]; }
@@ -23,6 +25,7 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
 #define YK_DEF_SERVICE  @"yk.serviceOn"
 #define YK_DEF_WAN      @"yk.wanOn"
 #define YK_DEF_SCRIPTS  @"yk.scripts"
+#define YK_DEF_PEER     @"yk.peerDevice"
 
 extern void YKAlert(UIViewController *host, NSString *title, NSString *message,
                     NSArray<NSString *> *buttons, void (^onIndex)(NSInteger idx));
@@ -65,7 +68,11 @@ extern NSString *YKEnginePort(void);
 - (void)ykRename;
 - (void)ykCopyID;
 - (void)ykScanConnect;
+- (void)ykHandleConnectCode:(NSString *)code;
+- (void)ykRebuildDevicePage;
 - (void)ykAddScript;
+- (void)ykSubscribeScript:(NSString *)code;
+- (NSString *)ykHashOf:(NSString *)s;
 - (void)ykRestartUserspace;
 - (void)ykOpenRecordBall;
 - (void)ykRefreshRecordList;
@@ -85,6 +92,7 @@ extern NSString *YKEnginePort(void);
     UILabel *_lblDeviceName;
     UILabel *_lblDeviceID;
     UIView *_recordListBox;
+    UIView *_scriptListBox;
     UIView *_ballView;
     UILabel *_ballLabel;
     BOOL _ballRecording;
@@ -234,9 +242,14 @@ extern NSString *YKEnginePort(void);
 
     BOOL svcOn = [[NSUserDefaults standardUserDefaults] objectForKey:YK_DEF_SERVICE] ? [[NSUserDefaults standardUserDefaults] boolForKey:YK_DEF_SERVICE] : YES;
     BOOL wanOn = [[NSUserDefaults standardUserDefaults] boolForKey:YK_DEF_WAN];
+    NSDictionary *peer = [[NSUserDefaults standardUserDefaults] dictionaryForKey:YK_DEF_PEER];
+    NSString *peerName = peer[@"name"];
+    NSString *peerIP = peer[@"ip"];
     NSArray *rows = @[ @[@"服务开关", @"允许局域网电脑接入当前设备", @"bolt.fill", @(svcOn ? 1 : 0)],
                        @[@"广域网", @"允许外网通过安全隧道接入当前设备", @"globe", @(wanOn ? 1 : 0)],
-                       @[@"未连接设备", @"当前暂无电脑接入", @"display", @(-1)] ];
+                       @[(peerName.length ? peerName : @"未连接设备"),
+                         (peerIP.length ? [NSString stringWithFormat:@"IP %@", peerIP] : @"当前暂无电脑接入"),
+                         @"display", @(peerName.length ? 2 : -1)] ];
     for (NSInteger i = 0; i < 3; i++) {
         NSArray *r = rows[i];
         BOOL on = [r[3] intValue] == 1;
@@ -276,10 +289,25 @@ extern NSString *YKEnginePort(void);
             if (i == 0) { _svcSwitch = sw; _svcRow = row; }
             if (i == 1) { _wanSwitch = sw; _wanRow = row; }
         } else {
-            UILabel *pill = [self ykLabel:@"待接入" size:12 bold:NO color:YkSub()];
-            pill.textAlignment = NSTextAlignmentRight;
-            pill.frame = CGRectMake(row.bounds.size.width - 74, 26, 62, 18);
-            [row addSubview:pill];
+            BOOL connected = ([r[3] intValue] == 2);
+            if (connected) {
+                row.backgroundColor = [YkBlue() colorWithAlphaComponent:0.06];
+                row.layer.borderColor = [YkBlue() colorWithAlphaComponent:0.18].CGColor;
+                row.layer.borderWidth = 1.0;
+                UILabel *pill = [self ykLabel:@"已连接" size:12 bold:YES color:YkGreen()];
+                pill.textAlignment = NSTextAlignmentCenter;
+                pill.backgroundColor = [YkGreen() colorWithAlphaComponent:0.12];
+                pill.layer.cornerRadius = 12;
+                pill.clipsToBounds = YES;
+                pill.frame = CGRectMake(row.bounds.size.width - 86, 22, 62, 24);
+                [row addSubview:pill];
+                tt.frame = CGRectMake(68, 15, 120, 22);
+            } else {
+                UILabel *pill = [self ykLabel:@"待接入" size:12 bold:NO color:YkSub()];
+                pill.textAlignment = NSTextAlignmentRight;
+                pill.frame = CGRectMake(row.bounds.size.width - 74, 26, 62, 18);
+                [row addSubview:pill];
+            }
         }
     }
 
@@ -413,13 +441,18 @@ extern NSString *YKEnginePort(void);
     [refresh addTarget:self action:@selector(ykReloadScripts) forControlEvents:UIControlEventTouchUpInside];
     [c2 addSubview:refresh];
 
-    UIView *emptyBox = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 72, CARD_W - INNER_PAD * 2, 54)];
+    _scriptListBox = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 72, CARD_W - INNER_PAD * 2, 54)];
+    [c2 addSubview:_scriptListBox];
+
+    UIView *emptyBox = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _scriptListBox.bounds.size.width, 54)];
     emptyBox.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1.0];
     emptyBox.layer.cornerRadius = 10.0;
-    [c2 addSubview:emptyBox];
+    emptyBox.tag = 9201;
+    [_scriptListBox addSubview:emptyBox];
     UILabel *empty = [self ykLabel:@"暂无订阅脚本" size:13 bold:NO color:YkSub()];
     empty.textAlignment = NSTextAlignmentCenter;
     empty.frame = CGRectMake(0, 18, emptyBox.bounds.size.width, 18);
+    empty.tag = 9202;
     [emptyBox addSubview:empty];
     _lblScriptEmpty = empty;
 
@@ -699,24 +732,119 @@ extern NSString *YKEnginePort(void);
     __weak typeof(self) ws = self;
     YKPresentScan([self ykHost], NO, @"扫一扫连接设备", ^(NSString *code) {
         __strong typeof(ws) sf = ws; if (!sf) return;
-        YKAlert(sf.ykHost, @"已识别二维码", code, @[@"好"], nil);
+        [sf ykHandleConnectCode:code];
     });
+}
+
+// 二维码内容：JSON 或 URL 查询串；广域网码需要先开启广域网（与原版一致）
+- (void)ykHandleConnectCode:(NSString *)code {
+    NSString *trim = [code stringByTrimmingCharactersInSet:
+                      [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    BOOL wanCode = [trim.lowercaseString containsString:@"wan"]
+                || [trim.lowercaseString containsString:@"tunnel"];
+    BOOL wanOn = [[NSUserDefaults standardUserDefaults] boolForKey:YK_DEF_WAN];
+    if (wanCode && !wanOn) {
+        YKAlert([self ykHost], @"广域网连接提示",
+                @"当前设备尚未开启广域网，请先开启后再扫码连接。", @[@"好"], nil);
+        return;
+    }
+
+    NSDictionary *info = nil;
+    NSData *d = [trim dataUsingEncoding:NSUTF8StringEncoding];
+    if (d) info = [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL];
+    if (![info isKindOfClass:[NSDictionary class]]) {
+        NSMutableDictionary *q = [NSMutableDictionary dictionary];
+        NSRange r = [trim rangeOfString:@"?"];
+        NSString *qs = (r.location != NSNotFound) ? [trim substringFromIndex:r.location + 1] : trim;
+        for (NSString *kv in [qs componentsSeparatedByString:@"&"]) {
+            NSArray *parts = [kv componentsSeparatedByString:@"="];
+            if (parts.count == 2) {
+                q[[parts[0] stringByRemovingPercentEncoding] ?: parts[0]] =
+                    [parts[1] stringByRemovingPercentEncoding] ?: parts[1];
+            }
+        }
+        info = q;
+    }
+
+    NSString *ip = info[@"ip"] ?: info[@"host"] ?: info[@"address"];
+    NSString *name = info[@"name"] ?: info[@"device"] ?: info[@"deviceName"] ?: @"PC";
+    if (!ip.length) {
+        YKAlert([self ykHost], @"二维码无效", @"未解析到设备地址，请重新扫码。", @[@"好"], nil);
+        return;
+    }
+    NSDictionary *peer = @{ @"name": name, @"ip": ip,
+                            @"port": info[@"port"] ?: @(65322) };
+    [[NSUserDefaults standardUserDefaults] setObject:peer forKey:YK_DEF_PEER];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    [self ykRebuildDevicePage];
+    YKAlert([self ykHost], @"连接设备", [NSString stringWithFormat:@"%@  IP %@", name, ip],
+            @[@"好"], nil);
+}
+
+// 重建设备页（连接信息变化后刷新）
+- (void)ykRebuildDevicePage {
+    if (!_devScroll) return;
+    CGFloat y = _devScroll.contentOffset.y;
+    [_devScroll removeFromSuperview];
+    _devScroll = nil;
+    [self ykDevicePage];
+    _devScroll.contentOffset = CGPointMake(0, y);
 }
 
 - (void)ykAddScript {
     __weak typeof(self) ws = self;
     YKPresentScan([self ykHost], YES, @"添加脚本", ^(NSString *code) {
         __strong typeof(ws) sf = ws; if (!sf) return;
-        NSMutableArray *list = [[[NSUserDefaults standardUserDefaults] arrayForKey:YK_DEF_SCRIPTS] mutableCopy];
-        if (!list) list = [NSMutableArray array];
-        [list addObject:@{ @"code": code ?: @"",
-                           @"name": [NSString stringWithFormat:@"脚本 %lu", (unsigned long)list.count + 1],
-                           @"addedAt": @([[NSDate date] timeIntervalSince1970]) }];
-        [[NSUserDefaults standardUserDefaults] setObject:list forKey:YK_DEF_SCRIPTS];
-        [[NSUserDefaults standardUserDefaults] synchronize];
-        [sf ykReloadScripts];
-        YKAlert(sf.ykHost, @"已添加脚本", code, @[@"好"], nil);
+        [sf ykSubscribeScript:code];
     });
+}
+
+// 脚本码订阅：与文案对齐（正在添加脚本，请稍候 / 脚本订阅信息不完整）
+- (void)ykSubscribeScript:(NSString *)code {
+    NSString *c = [code stringByTrimmingCharactersInSet:
+                   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (c.length < 4) {
+        YKAlert([self ykHost], @"脚本订阅信息不完整", @"脚本码为空或长度不足，请重新扫码。", @[@"好"], nil);
+        return;
+    }
+    UIAlertController *hud = [UIAlertController alertControllerWithTitle:nil
+                                                               message:@"正在添加脚本，请稍候"
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+    [[self ykHost] presentViewController:hud animated:YES completion:nil];
+
+    // 脚本码 → 订阅条目（本地保存 name/hash/status）
+    NSString *hash = [self ykHashOf:c];
+    NSString *name = [c containsString:@"://"]
+        ? [[c componentsSeparatedByString:@"://"].lastObject componentsSeparatedByString:@"/"].firstObject
+        : [NSString stringWithFormat:@"脚本 %@", [hash substringToIndex:6]];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.9 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [hud dismissViewControllerAnimated:YES completion:^{
+            NSMutableArray *list = [[[NSUserDefaults standardUserDefaults]
+                                     arrayForKey:YK_DEF_SCRIPTS] mutableCopy] ?: [NSMutableArray array];
+            for (NSDictionary *o in list) {
+                if ([o[@"code"] isEqualToString:c]) {
+                    YKAlert([self ykHost], @"已订阅", @"该脚本已在订阅列表中。", @[@"好"], nil);
+                    return;
+                }
+            }
+            [list addObject:@{ @"code": c, @"name": name ?: @"未命名脚本",
+                               @"hash": hash, @"status": @"已订阅 · 自动更新",
+                               @"addedAt": @([[NSDate date] timeIntervalSince1970]) }];
+            [[NSUserDefaults standardUserDefaults] setObject:list forKey:YK_DEF_SCRIPTS];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            [self ykReloadScripts];
+            YKAlert([self ykHost], @"已添加脚本", name ?: c, @[@"好"], nil);
+        }];
+    });
+}
+
+- (NSString *)ykHashOf:(NSString *)s {
+    const char *c = s.UTF8String;
+    unsigned long h = 5381;
+    while (*c) h = ((h << 5) + h) + (unsigned char)(*c++);
+    return [NSString stringWithFormat:@"%016lx", h];
 }
 
 - (void)ykRestartUserspace {
@@ -838,83 +966,29 @@ extern NSString *YKEnginePort(void);
 }
 
 - (void)ykOpenRecordBall {
-    if (_ballView) return;
-    CGFloat W = _W, H = _H;
-    _ballView = [[UIView alloc] initWithFrame:CGRectMake(W - 88, H * 0.45, 56, 56)];
-    _ballView.backgroundColor = [UIColor colorWithRed:1.0 green:0.23 blue:0.19 alpha:1.0];
-    _ballView.layer.cornerRadius = 28;
-    _ballView.layer.shadowColor = [UIColor blackColor].CGColor;
-    _ballView.layer.shadowOpacity = 0.35;
-    _ballView.layer.shadowRadius = 10;
-    _ballView.layer.shadowOffset = CGSizeMake(0, 4);
-    [self addSubview:_ballView];
-
-    _ballLabel = [[UILabel alloc] initWithFrame:_ballView.bounds];
-    _ballLabel.text = @"●";
-    _ballLabel.textAlignment = NSTextAlignmentCenter;
-    _ballLabel.textColor = [UIColor whiteColor];
-    _ballLabel.font = [UIFont systemFontOfSize:26];
-    _ballLabel.userInteractionEnabled = NO;
-    [_ballView addSubview:_ballLabel];
-
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(ykBallPan:)];
-    [_ballView addGestureRecognizer:pan];
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(ykBallTap:)];
-    [_ballView addGestureRecognizer:tap];
-
-    UIControl *mask = [[UIControl alloc] initWithFrame:CGRectMake(0, NAV_H, W, H - NAV_H - 68)];
-    mask.backgroundColor = [UIColor colorWithWhite:0 alpha:0.02];
-    mask.tag = 9911;
-    [mask addTarget:self action:@selector(ykRecordTouch:) forControlEvents:UIControlEventTouchDown];
-    [self insertSubview:mask belowSubview:_ballView];
-
-    _ballSteps = [NSMutableArray array];
-    _ballRecording = NO;
-}
-
-- (void)ykBallPan:(UIPanGestureRecognizer *)g {
-    CGPoint p = [g translationInView:self];
-    CGPoint c = _ballView.center;
-    _ballView.center = CGPointMake(c.x + p.x, c.y + p.y);
-    [g setTranslation:CGPointZero inView:self];
-}
-
-- (void)ykBallTap:(UITapGestureRecognizer *)g {
-    __weak typeof(self) ws = self;
-    if (!_ballRecording) {
-        _ballRecording = YES;
-        _ballStartAt = [NSDate date].timeIntervalSince1970;
-        [self bringSubviewToFront:_ballView];
-        YKAlert([self ykHost], @"开始录制", @"操作会被记录，点小球可结束并保存。",
-                @[@"好"], nil);
-    } else {
-        _ballRecording = NO;
-        NSArray *steps = [_ballSteps copy];
-        NSTimeInterval dur = [NSDate date].timeIntervalSince1970 - _ballStartAt;
-        [_ballView removeFromSuperview]; _ballView = nil;
-        [[self viewWithTag:9911] removeFromSuperview];
-        if (!steps.count) return;
-        NSDictionary *body = @{ @"name": [NSString stringWithFormat:@"录制 %@",
-                                          [[NSDateFormatter new] stringFromDate:[NSDate date]] ?: @""],
-                                @"steps": steps, @"duration": @(dur) };
-        NSData *d = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
-        NSMutableURLRequest *r = [NSMutableURLRequest requestWithURL:
-            [NSURL URLWithString:@"http://127.0.0.1:65325/record/save"]];
-        r.HTTPMethod = @"POST"; r.HTTPBody = d;
-        [r setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-        [[[NSURLSession sharedSession] dataTaskWithRequest:r
-            completionHandler:^(NSData *x, NSURLResponse *y, NSError *e) {
-            dispatch_async(dispatch_get_main_queue(), ^{ [ws ykRefreshRecordList]; });
-        }] resume];
+    // 交给 SpringBoard 侧的悬浮球（跨 App 录制），随后退到桌面（与原版一致）
+    CFMessagePortRef remote = CFMessagePortCreateRemote(kCFAllocatorDefault, CFSTR("com.yk.ball"));
+    BOOL ok = NO;
+    if (remote) {
+        NSData *body = [NSJSONSerialization dataWithJSONObject:@{ @"action": @"show" }
+                                                       options:0 error:NULL];
+        CFDataRef reply = NULL;
+        SInt32 st = CFMessagePortSendRequest(remote, 1, (__bridge CFDataRef)body,
+                                             1.0, 1.0, kCFRunLoopDefaultMode, &reply);
+        ok = (st == kCFMessagePortSuccess);
+        if (reply) CFRelease(reply);
+        CFRelease(remote);
     }
-}
-
-- (void)ykRecordTouch:(UIControl *)c {
-    if (!_ballRecording) return;
-    CGPoint p = [c convertPoint:CGPointZero toView:self];
-    NSTimeInterval t = [NSDate date].timeIntervalSince1970 - _ballStartAt;
-    [_ballSteps addObject:@{ @"x": @(p.x * 2), @"y": @(p.y * 2),
-                             @"touch": @1, @"delayMs": @( (int)(t * 0 ) + 30 ) }];
+    if (!ok) {
+        YKAlert([self ykHost], @"录制小球不可用",
+                @"SpringBoard 插件未加载（com.yk.ball 通道无响应），请重启 SpringBoard 后重试。",
+                @[@"好"], nil);
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [[UIApplication sharedApplication] performSelector:@selector(suspend)];
+    });
 }
 
 - (void)ykHTTP:(NSString *)path done:(void (^)(NSDictionary *))done {
@@ -929,12 +1003,73 @@ extern NSString *YKEnginePort(void);
 - (void)ykReloadScripts {
     NSArray *list = [[NSUserDefaults standardUserDefaults] arrayForKey:YK_DEF_SCRIPTS] ?: @[];
     _lblScriptCount.text = list.count ? [NSString stringWithFormat:@"%lu", (unsigned long)list.count] : @"-";
-    _lblScriptEmpty.text = list.count ? [NSString stringWithFormat:@"共 %lu 个脚本", (unsigned long)list.count]
-                                      : @"暂无订阅脚本";
     _lblHttpStatus.text = @"已开启";
     _lblHttpStatus.textColor = YkGreen();
     _lblState.text = @"就绪";
     _lblPort.text = @"65324";
+
+    if (!_scriptListBox) return;
+    for (UIView *v in _scriptListBox.subviews) [v removeFromSuperview];
+
+    CGFloat w = _scriptListBox.bounds.size.width;
+    if (!list.count) {
+        _lblScriptEmpty.hidden = NO;
+        _lblScriptEmpty.text = @"暂无订阅脚本";
+        return;
+    }
+    _lblScriptEmpty.hidden = YES;
+
+    CGFloat y = 0;
+    for (NSDictionary *it in list) {
+        UIView *row = [[UIView alloc] initWithFrame:CGRectMake(0, y, w, 64)];
+        row.backgroundColor = [UIColor colorWithWhite:0.975 alpha:1.0];
+        row.layer.cornerRadius = 10;
+        [_scriptListBox addSubview:row];
+
+        [row addSubview:[self ykIconBox:CGRectMake(8, 10, 44, 44)
+                                  symbol:@"doc.text" tint:YkMagenta() glyph:22]];
+        UILabel *name = [self ykLabel:(it[@"name"] ?: @"未命名脚本") size:15 bold:YES color:YkMain()];
+        name.frame = CGRectMake(62, 10, w - 150, 18); [row addSubview:name];
+
+        UILabel *meta = [self ykLabel:(it[@"status"] ?: @"已订阅 · 自动更新")
+                                 size:11 bold:NO color:YkSub()];
+        meta.frame = CGRectMake(62, 30, w - 150, 16); [row addSubview:meta];
+
+        UIButton *del = [UIButton buttonWithType:UIButtonTypeSystem];
+        del.frame = CGRectMake(w - 70, 14, 62, 36);
+        [del setTitle:@"删除" forState:UIControlStateNormal];
+        del.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+        del.backgroundColor = [YkRed() colorWithAlphaComponent:0.10];
+        del.layer.cornerRadius = 9;
+        [del setTitleColor:YkRed() forState:UIControlStateNormal];
+        objc_setAssociatedObject(del, "code", it[@"code"] ?: @"", OBJC_ASSOCIATION_RETAIN);
+        [del addTarget:self action:@selector(ykDeleteScript:) forControlEvents:UIControlEventTouchUpInside];
+        [row addSubview:del];
+
+        y += 72;
+    }
+    CGRect f = _scriptListBox.frame;
+    f.size.height = y;
+    _scriptListBox.frame = f;
+}
+
+- (void)ykDeleteScript:(UIButton *)b {
+    NSString *code = objc_getAssociatedObject(b, "code");
+    __weak typeof(self) ws = self;
+    YKAlert([self ykHost], @"删除脚本订阅？", @"将从订阅列表移除，确认要删除吗",
+            @[@"取消", @"删除"], ^(NSInteger i) {
+        if (i != 1) return;
+        __strong typeof(ws) sf = ws; if (!sf) return;
+        NSMutableArray *list = [[[NSUserDefaults standardUserDefaults]
+                                 arrayForKey:YK_DEF_SCRIPTS] mutableCopy] ?: [NSMutableArray array];
+        NSIndexSet *drop = [list indexesOfObjectsPassingTest:^BOOL(NSDictionary *o, NSUInteger idx, BOOL *st) {
+            return [o[@"code"] isEqualToString:code ?: @""];
+        }];
+        [list removeObjectsAtIndexes:drop];
+        [[NSUserDefaults standardUserDefaults] setObject:list forKey:YK_DEF_SCRIPTS];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        [sf ykReloadScripts];
+    });
 }
 
 - (void)ykShowPageObj:(id)o {
