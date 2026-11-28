@@ -258,6 +258,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
             SetF(fingerEv, 0xb0013, 0.0);
             SetF(fingerEv, 0xb0014, 5.0);
             SetF(fingerEv, 0xb0015, 5.0);
+                SetF(fingerEv, 0xb001a, 1.0);   // QualityRadiiAccuracy
         }
         fprintf(stderr, "[touch] finger nx=%.3f ny=%.3f touch=%d\n", nx, ny, touch); fflush(stderr);
         if (fa) ((YkAppendFn)fa)(hand, fingerEv, 0);
