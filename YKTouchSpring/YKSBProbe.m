@@ -72,9 +72,51 @@ static void SBTap(double nx, double ny) {
         usleep(60000);
     }
 }
+
+// ---- 序列化事件为字节流，用于原版 vs 我们的二进制对比 ----
+static void SBDumpEvent(void *e, const char *tag) {
+    void *fcd = Sym(@"IOHIDEventCreateData");
+    if (!fcd) { SBLog(@"%s no CreateData sym", tag); return; }
+    CFDataRef d = ((CFDataRef (*)(CFAllocatorRef, void *))fcd)(kCFAllocatorDefault, e);
+    if (!d) { SBLog(@"%s CreateData NULL", tag); return; }
+    CFIndex n = CFDataGetLength(d);
+    const UInt8 *b = CFDataGetBytePtr(d);
+    NSMutableString *hx = [NSMutableString string];
+    CFIndex lim = n > 96 ? 96 : n;
+    for (CFIndex i = 0; i < lim; i++) [hx appendFormat:@"%02x", b[i]];
+    SBLog(@"DUMP %s len=%ld %@", tag, (long)n, hx);
+    CFRelease(d);
+}
+
+// hook IOHIDEventSystemClientDispatchEvent，抓出发送方的事件
+typedef void (*DispFn)(void *, void *);
+static DispFn gOrigDisp = NULL;
+static void SBDispHook(void *client, void *event) {
+    if (event) SBDumpEvent(event, "SENT");
+    if (gOrigDisp) gOrigDisp(client, event);
+}
+
 __attribute__((constructor))
 static void YKSBProbeInit(void){
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(10.0*NSEC_PER_SEC)),dispatch_get_main_queue(),^{
+        // 安装 dispatch hook（用 substrate）
+        {
+            void *hMS = NULL;
+            void *sub = dlopen("/var/jb/usr/lib/libsubstrate.dylib", RTLD_LAZY);
+            if (!sub) sub = dlopen("/usr/lib/libsubstrate.dylib", RTLD_LAZY);
+            if (sub) hMS = dlsym(sub, "MSHookFunction");
+            if (!hMS) {
+                void *el = dlopen("/var/jb/usr/lib/libellekit.dylib", RTLD_LAZY);
+                if (el) hMS = dlsym(el, "MSHookFunction");
+            }
+            void *target = Sym(@"IOHIDEventSystemClientDispatchEvent");
+            if (hMS && target) {
+                ((void (*)(void *, void *, void **))hMS)(target, (void *)SBDispHook, (void **)&gOrigDisp);
+                SBLog(@"dispatch hook installed orig=%p", (void *)gOrigDisp);
+            } else {
+                SBLog(@"dispatch hook FAILED hMS=%p target=%p", hMS, target);
+            }
+        }
         SBLog(@"=== SB tap test START ===");
         SBTap(0.384,0.931);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(3.0*NSEC_PER_SEC)),dispatch_get_main_queue(),^{
