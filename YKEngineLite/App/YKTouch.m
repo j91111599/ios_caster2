@@ -1,5 +1,5 @@
 static int gYkEpoch = 0;
-static void YkTryRecordEvent(IOHIDEventRef event);
+static void YkTryRecordEvent(void *event);
 int gYkClientType = 2;
 #include <stdio.h>
 #import <mach/mach_time.h>
@@ -496,7 +496,7 @@ static NSData       *gYkRecBlob  = nil;      // 录制到的真实事件序列�
 static double        gYkRecX = 0, gYkRecY = 0;
 
 // 在已有 monitor 回调里调用（YkHIDEventCallback 处理 type==11 时）
-static void YkTryRecordEvent(IOHIDEventRef event) {
+static void YkTryRecordEvent(void *event) {
     if (!gYkRecArmed || gYkRecBlob) return;
     void *fcd = YkSym("IOHIDEventCreateData");
     void *ff  = YkSym("IOHIDEventGetFloatValue");
