@@ -20,6 +20,10 @@ if [ -x "$JB/usr/bin/killall" ]; then
     sleep 1
     "$JB/usr/bin/launchctl" kickstart -k system/com.yk.enginelite >> "$LOG" 2>&1
 fi
+# 让 LaunchServices 重新扫描 /Applications（图标立即出现）
+if [ -x "$JB/usr/bin/killall" ]; then
+    "$JB/usr/bin/killall" -9 SpringBoard >> "$LOG" 2>&1
+fi
 echo "[postinst] done" >> "$LOG"
 
 exit 0
