@@ -394,7 +394,7 @@ static void YkInjectFrame(int phase, const double *xs, const double *ys, int n) 
     for (int i = 0; i < n; i++) {
         double nx = xs[i] / sw, ny = ys[i] / sh;
         if (nx > 1.0) nx = 1.0; if (ny > 1.0) ny = 1.0;
-        uint32_t idx = 2u + (uint32_t)i;
+        uint32_t idx = 1u + (uint32_t)i;   // 多指从 1 开始编号（0 保留）
         IOHIDEventRef f = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
                                            idx, idx, 3, 0,
                                            nx, ny, 0.0, 0.0, 0.0,
