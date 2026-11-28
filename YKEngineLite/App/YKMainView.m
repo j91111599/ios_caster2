@@ -334,7 +334,7 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
         if (i == 3) _lblScriptCount = v;
     }
 
-    UIView *c2 = [self ykCard:CGRectMake(CARD_X, 368, CARD_W, 146)];
+    UIView *c2 = [self ykCard:CGRectMake(CARD_X, 304, CARD_W, 146)];
     [_scriptScroll addSubview:c2];
     [self ykCardHeader:c2 title:@"脚本列表" symbol:@"list.bullet.rectangle" tint:YkMagenta()];
 
@@ -357,7 +357,7 @@ static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 b
     [emptyBox addSubview:empty];
     _lblScriptEmpty = empty;
 
-    _scriptScroll.contentSize = CGSizeMake(_W, 534);
+    _scriptScroll.contentSize = CGSizeMake(_W, 470);
 }
 
 #pragma mark - 录制页
