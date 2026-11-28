@@ -99,6 +99,44 @@ void YkSetServiceRunning(BOOL on) {
     }
 }
 
+
+// 在 jbroot / 常见前缀里找一个可执行文件（rootless/roothide 路径不固定）
+static NSString *YkFindTool(NSString *name) {
+    NSMutableArray *c = [NSMutableArray array];
+    NSArray *roots = [[NSFileManager defaultManager]
+                      contentsOfDirectoryAtPath:@"/var/containers/Bundle/Application" error:NULL];
+    for (NSString *d in roots) {
+        if (![d hasPrefix:@".jbroot-"]) continue;
+        [c addObject:[NSString stringWithFormat:
+            @"/var/containers/Bundle/Application/%@/usr/bin/%@", d, name]];
+        [c addObject:[NSString stringWithFormat:
+            @"/var/containers/Bundle/Application/%@/usr/sbin/%@", d, name]];
+    }
+    [c addObjectsFromArray:@[[NSString stringWithFormat:@"/var/jb/usr/bin/%@", name],
+                             [NSString stringWithFormat:@"/var/jb/usr/sbin/%@", name],
+                             [NSString stringWithFormat:@"/usr/bin/%@", name],
+                             [NSString stringWithFormat:@"/usr/sbin/%@", name]]];
+    for (NSString *p in c) {
+        if ([[NSFileManager defaultManager] isExecutableFileAtPath:p]) return p;
+    }
+    return nil;
+}
+
+static int YkSpawnWait(NSString *path, NSArray<NSString *> *args) {
+    if (!path) return -1;
+    pid_t pid = 0;
+    NSMutableArray *all = [NSMutableArray arrayWithObject:path];
+    [all addObjectsFromArray:args];
+    char **argv = calloc(all.count + 1, sizeof(char *));
+    for (NSUInteger i = 0; i < all.count; i++) argv[i] = (char *)[all[i] UTF8String];
+    int rc = posix_spawn(&pid, path.UTF8String, NULL, NULL, argv, environ);
+    free(argv);
+    if (rc != 0) return -1000 - rc;
+    int st = 0;
+    waitpid(pid, &st, 0);
+    return WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+}
+
 // iOS 上 /bin/sh 未必存在（本机 rootfs 只读且 /bin 里只有 df/ps），
 // 这里按候选列表找可用的 shell（roothide 的 jbroot 里有 usr/bin/sh）。
 static NSString *YkShellPath(void) {
@@ -323,11 +361,29 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
     if ([head isEqualToString:@"system"]) {
         NSString *verb = s.count > 1 ? s[1] : @"";
         if ([verb isEqualToString:@"respring"]) {
+            BOOL viaTool = NO;
+            NSString *killall = YkFindTool(@"killall");
+            if (killall) { viaTool = YES; }
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
                            dispatch_get_global_queue(0, 0), ^{
-                YkRunCmd(@"killall -9 backboardd 2>/dev/null || killall -9 SpringBoard 2>/dev/null");
+                if (viaTool) {
+                    YkSpawnWait(killall, @[@"-9", @"backboardd"]);
+                    YkSpawnWait(killall, @[@"-9", @"SpringBoard"]);
+                } else {
+                    YkRunCmd(@"killall -9 backboardd 2>/dev/null || killall -9 SpringBoard 2>/dev/null");
+                }
             });
             return @{ @"value": @{ @"ok": @YES, @"action": @"respring" } };
+        }
+        if ([verb isEqualToString:@"install"]) {
+            NSString *path = body[@"path"] ?: @"";
+            if (![[NSFileManager defaultManager] fileExistsAtPath:path])
+                return @{ @"value.error": @"not_found", @"value.message": @"deb 不存在" };
+            NSString *dpkg = YkFindTool(@"dpkg");
+            if (!dpkg)
+                return @{ @"value.error": @"no_dpkg", @"value.message": @"找不到 dpkg" };
+            int rc = YkSpawnWait(dpkg, @[@"-i", path]);
+            return @{ @"value": @{ @"ok": @(rc == 0), @"exit": @(rc), @"dpkg": dpkg } };
         }
         if ([verb isEqualToString:@"shell"]) {
             NSString *cmd = body[@"command"] ?: @"";
