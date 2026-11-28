@@ -457,12 +457,18 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
             NSString *cmd = body[@"command"] ?: @"";
             if (!cmd.length) return @{ @"value.error": @"bad_request", @"value.message": @"缺少 command" };
             NSString *outPath = @"/var/mobile/Media/_daemon_sh.out";
+            NSString *sh = YkShellPath();
+            NSString *root = YkRootPath() ?: @"<nil>";
+            [[NSFileManager defaultManager] removeItemAtPath:outPath error:NULL];
             NSString *full = [NSString stringWithFormat:
                               @"( %@ ) > %@ 2>&1; echo $? >> %@", cmd, outPath, outPath];
             YkRunCmd(full);
             NSString *out = [NSString stringWithContentsOfFile:outPath
                                                       encoding:NSUTF8StringEncoding error:NULL] ?: @"";
-            return @{ @"value": @{ @"output": out, @"exitCode": @0 } };
+            return @{ @"value": @{ @"output": out, @"exitCode": @0,
+                                   @"sh": sh ?: @"<nil>", @"root": root,
+                                   @"outFile": @([[NSFileManager defaultManager]
+                                                 fileExistsAtPath:outPath]) } };
         }
         if ([verb isEqualToString:@"service"]) {
             if (body[@"on"] != nil) {
