@@ -98,6 +98,7 @@ BOOL YKRequestRestartUserspace(void) {
     UIView *_scanLine;
     UILabel *_hint;
     UITextField *_codeField;
+    UIView *_codeBar;
     BOOL _animating;
     BOOL _handled;
 }
@@ -186,6 +187,13 @@ BOOL YKRequestRestartUserspace(void) {
         bar.backgroundColor = [UIColor colorWithWhite:0.35 alpha:0.55];
         bar.layer.cornerRadius = 14;
         [self.view addSubview:bar];
+        _codeBar = bar;
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(ykKeyboardWillShow:)
+                                                     name:UIKeyboardWillShowNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(ykKeyboardWillHide:)
+                                                     name:UIKeyboardWillHideNotification object:nil];
 
         _codeField = [UITextField new];
         _codeField.textColor = [UIColor whiteColor];
@@ -222,6 +230,22 @@ BOOL YKRequestRestartUserspace(void) {
     [super viewWillDisappear:animated];
     _animating = NO;
     [_session stopRunning];
+}
+
+- (void)ykKeyboardWillShow:(NSNotification *)n {
+    if (!_codeBar) return;
+    CGRect kb = [n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGFloat kbH = self.view.bounds.size.height - kb.origin.y;
+    CGRect f = _codeBar.frame;
+    f.origin.y = self.view.bounds.size.height - kbH - f.size.height - 12;
+    [UIView animateWithDuration:0.25 animations:^{ _codeBar.frame = f; }];
+}
+
+- (void)ykKeyboardWillHide:(NSNotification *)n {
+    if (!_codeBar) return;
+    CGRect f = _codeBar.frame;
+    f.origin.y = self.view.bounds.size.height - 96;
+    [UIView animateWithDuration:0.25 animations:^{ _codeBar.frame = f; }];
 }
 
 - (void)ykBack {

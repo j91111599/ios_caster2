@@ -530,7 +530,7 @@ extern NSString *YKEnginePort(void);
         UILabel *t = [self ykLabel:r[0] size:14 bold:YES color:YkMain()];
         t.frame = CGRectMake(50, 6, 220, 18); [row addSubview:t];
         UILabel *d = [self ykLabel:r[1] size:11 bold:NO color:YkSub()];
-        d.frame = CGRectMake(50, 24, 220, 16); [row addSubview:d];
+        d.frame = CGRectMake(50, 22, 236, 26); d.numberOfLines = 2; [row addSubview:d];
     }
 
     _recordListBox = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 280, CARD_W - INNER_PAD * 2, 100)];
