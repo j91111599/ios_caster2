@@ -1,3 +1,4 @@
+int gYkClientType = 2;
 #include <stdio.h>
 #import <mach/mach_time.h>
 //  YKTouch.m — 触控注入（IOHIDEventSystemClient，私有符号 dlsym）
@@ -88,9 +89,11 @@ static void YkHIDEventCallback(void *target, void *refcon, void *service, IOHIDE
 }
 
 static IOHIDEventSystemClientRef YkHIDClientMain(void) {
-    // 必须只在主线程调用：client 要绑到主 runloop，否则 Dispatch 会被静默丢弃
     static IOHIDEventSystemClientRef client = NULL;
-    if (client) return client;
+    static int usedType = -1;
+    if (client && usedType == gYkClientType) return client;
+    if (client && usedType != gYkClientType) { client = NULL; }
+    usedType = gYkClientType;
 
     void *hc = YkSym("IOHIDEventSystemClientCreate");
     if (hc) client = ((IOHIDEventSystemClientRef (*)(CFAllocatorRef))hc)(kCFAllocatorDefault);
@@ -98,7 +101,7 @@ static IOHIDEventSystemClientRef YkHIDClientMain(void) {
         void *h = YkSym("IOHIDEventSystemClientCreateWithType");
         if (h) {
             typedef IOHIDEventSystemClientRef (*T3)(CFAllocatorRef, int, CFDictionaryRef);
-            client = ((T3)h)(kCFAllocatorDefault, 2, NULL);
+            client = ((T3)h)(kCFAllocatorDefault, gYkClientType, NULL);
         }
     }
     if (client) {
@@ -118,6 +121,8 @@ static IOHIDEventSystemClientRef YkHIDClientMain(void) {
     }
     return client;
 }
+
+void YkResetClient(void);   // forward
 
 static IOHIDEventSystemClientRef YkHIDClient(void) {
     // 任意线程调用都安全：切到主线程取 client
@@ -449,3 +454,4 @@ NSDictionary *YkTouchCaptureInfo(void) {
         @"x": @(gYkLastRealX),
         @"y": @(gYkLastRealY) } };
 }
+

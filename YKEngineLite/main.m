@@ -14,6 +14,7 @@
 
 // 模块入口（来自 Recovered/*.m）
 extern uint64_t gYkSenderID;
+extern int gYkClientType;
 extern NSDictionary *YkLoopbackTest(double x, double y);
 extern NSDictionary *YkTouchCaptureInfo(void);
 extern NSDictionary *YkTouchTap(double x, double y);
@@ -95,6 +96,10 @@ static NSDictionary *YKDispatch(NSString *method, NSString *path,
     if ([head isEqualToString:@"touch"]) {
         NSString *v = s.count > 1 ? s[1] : @"ping";
         double x = [body[@"x"] doubleValue], y = [body[@"y"] doubleValue];
+        if (body[@"clientType"]) {
+            int nt = [body[@"clientType"] intValue];
+            gYkClientType = nt;
+        }
         if (body[@"sender"]) gYkSenderID = [body[@"sender"] unsignedLongLongValue];
         else gYkSenderID = 0;
         if ([v isEqualToString:@"tap"])       return YkTouchTap(x, y);
