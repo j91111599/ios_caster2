@@ -61,6 +61,8 @@ extern NSString *YKEnginePort(void);
 - (void)ykTab:(UIButton *)sender;
 - (void)ykSelectTab:(NSInteger)idx;
 - (void)ykShowPageObj:(id)o;
+- (void)ykInstallDebugHook;
+- (void)ykDebugConnectNote:(NSNotification *)n;
 - (void)ykReloadScripts;
 - (UIViewController *)ykHost;
 - (void)ykToggleService:(UISwitch *)sw;
@@ -102,6 +104,7 @@ extern NSString *YKEnginePort(void);
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
+        [self ykInstallDebugHook];
         self.backgroundColor = YkPageBg();
         _W = frame.size.width  > 1 ? frame.size.width  : 375.0;
         _H = frame.size.height > 1 ? frame.size.height : 667.0;
@@ -625,6 +628,16 @@ extern NSString *YKEnginePort(void);
     }
 }
 
+- (void)ykInstallDebugHook {
+    static BOOL once = NO;
+    if (once) return;
+    once = YES;
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(ykDebugConnectNote:)
+                                                 name:@"YKDebugConnect"
+                                               object:nil];
+}
+
 - (void)ykSelectTab:(NSInteger)idx {
     for (NSInteger i = 0; i < _tabIcons.count; i++) {
         UIColor *c = (i == idx) ? YkTint() : YkSub();
@@ -729,6 +742,10 @@ extern NSString *YKEnginePort(void);
     [UIPasteboard generalPasteboard].string = sid;
     UIImpactFeedbackGenerator *g = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
     [g impactOccurred];
+}
+
+- (void)ykDebugConnectNote:(NSNotification *)n {
+    if ([n.object isKindOfClass:[NSString class]]) [self ykHandleConnectCode:n.object];
 }
 
 - (void)ykScanConnect {
@@ -1093,3 +1110,4 @@ extern NSString *YKEnginePort(void);
 }
 
 @end
+    [self ykInstallDebugHook];
