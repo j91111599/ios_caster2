@@ -1,21 +1,23 @@
 //  YKMainView —— 三页复刻（纯 frame 布局）
 //  几何/配色来源：设备实测 /element/tree + 截图像素采样（750x1334 @2x）
-//    导航条 0..64pt（状态栏 20 + 44），卡片 x=20 宽 335，卡片内边距 20
-//    蓝色 #24A1F1、页面底色 #F6F5FA、行高 68、磁贴 142x80、磁贴间距 12
-//    磁贴底色：设备IP #EBF5FF / 越狱 #FCEBEB / 分辨率 #EFF9FB / 版本 #FFF7EC
+//    导航条 0..64pt（状态栏 20 + 44）；卡片 x=20 宽 335，内边距 20
+//    蓝色 #24A1F1、页面底色 #F6F5FA；行高 68、磁贴 142x80、磁贴间距 12
+//    磁贴底色：蓝 #EBF5FF / 红 #FCEBEB / 青 #EFF9FB / 橙 #FFF7EC
+//    脚本页：绿 #EAF6EE / 紫 #EFEDFB / 橙 #FEF3E6 / 品红 #F7EDFB
+//    录制页步骤：粉 #FDEEF0 / 蓝 #EAF2FE / 绿 #EAF7EE / 黄 #FEF6E6
 #import <UIKit/UIKit.h>
 
-static UIColor *YkBlue(void)    { return [UIColor colorWithRed:0.141 green:0.631 blue:0.945 alpha:1.0]; } // #24A1F1
-static UIColor *YkPageBg(void)  { return [UIColor colorWithRed:0.965 green:0.961 blue:0.980 alpha:1.0]; } // #F6F5FA
+static UIColor *YkBlue(void)    { return [UIColor colorWithRed:0.141 green:0.631 blue:0.945 alpha:1.0]; }
+static UIColor *YkPageBg(void)  { return [UIColor colorWithRed:0.965 green:0.961 blue:0.980 alpha:1.0]; }
 static UIColor *YkSub(void)     { return [UIColor colorWithRed:0.541 green:0.541 blue:0.561 alpha:1.0]; }
 static UIColor *YkMain(void)    { return [UIColor colorWithWhite:0.08 alpha:1.0]; }
-static UIColor *YkLine(void)    { return [UIColor colorWithWhite:0.90 alpha:1.0]; }
 static UIColor *YkTint(void)    { return YkBlue(); }
 static UIColor *YkPurple(void)  { return [UIColor colorWithRed:0.44 green:0.36 blue:0.86 alpha:1.0]; }
 static UIColor *YkRed(void)     { return [UIColor colorWithRed:0.93 green:0.35 blue:0.33 alpha:1.0]; }
-static UIColor *YkTeal(void)     { return [UIColor colorWithRed:0.31 green:0.71 blue:0.78 alpha:1.0]; }
+static UIColor *YkTeal(void)    { return [UIColor colorWithRed:0.31 green:0.71 blue:0.78 alpha:1.0]; }
 static UIColor *YkOrange(void)  { return [UIColor colorWithRed:0.96 green:0.63 blue:0.22 alpha:1.0]; }
 static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 blue:0.42 alpha:1.0]; }
+static UIColor *YkMagenta(void) { return [UIColor colorWithRed:0.72 green:0.35 blue:0.85 alpha:1.0]; }
 
 #define NAV_H      64.0
 #define CARD_X     20.0
@@ -36,6 +38,8 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
 - (UIView *)ykCard:(CGRect)r;
 - (UIView *)ykIconBox:(CGRect)r symbol:(NSString *)n tint:(UIColor *)tint glyph:(CGFloat)g;
 - (UIView *)ykCardHeader:(UIView *)card title:(NSString *)t symbol:(NSString *)n tint:(UIColor *)tint;
+- (UIView *)ykTileAt:(CGRect)r key:(NSString *)k value:(NSString *)v symbol:(NSString *)s
+                tint:(UIColor *)tint bg:(UIColor *)bg;
 - (void)ykTab:(UIButton *)sender;
 - (void)ykSelectTab:(NSInteger)idx;
 - (void)ykShowPageObj:(id)o;
@@ -46,6 +50,9 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     CGFloat _W, _H;
     NSMutableArray *_tabIcons;
     NSMutableArray *_tabLabels;
+    UIView *_tabCapsule;
+    UIImageView *_navLeftIcon;
+    UIButton *_navRightBtn;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -58,6 +65,7 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
         [self ykScriptPage];
         [self ykRecordPage];
         [self ykBottom];
+        [self ykSelectTab:0];
     }
     return self;
 }
@@ -84,7 +92,6 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     return v;
 }
 
-// 圆角方形图标底 + 字形（原版所有图标都是这种「浅色底 + 同色系字形」）
 - (UIView *)ykIconBox:(CGRect)r symbol:(NSString *)n tint:(UIColor *)tint glyph:(CGFloat)g {
     UIView *box = [[UIView alloc] initWithFrame:r];
     box.backgroundColor = [tint colorWithAlphaComponent:0.12];
@@ -98,7 +105,6 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     return box;
 }
 
-// 卡片头：36x36 图标 + 标题（相对卡片坐标 20,20 / 66,28）
 - (UIView *)ykCardHeader:(UIView *)card title:(NSString *)t symbol:(NSString *)n tint:(UIColor *)tint {
     [card addSubview:[self ykIconBox:CGRectMake(INNER_PAD, 20, 36, 36) symbol:n tint:tint glyph:20]];
     UILabel *lbl = [self ykLabel:t size:17 bold:YES color:YkMain()];
@@ -107,23 +113,58 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     return lbl;
 }
 
-#pragma mark - 顶部导航
+- (UIView *)ykTileAt:(CGRect)r key:(NSString *)k value:(NSString *)v symbol:(NSString *)s
+                tint:(UIColor *)tint bg:(UIColor *)bg {
+    UIView *tile = [[UIView alloc] initWithFrame:r];
+    tile.backgroundColor = bg;
+    tile.layer.cornerRadius = 12.0;
+    [tile addSubview:[self ykIconBox:CGRectMake(12, 10, 32, 32) symbol:s tint:tint glyph:17]];
+    UILabel *kl = [self ykLabel:k size:12 bold:NO color:YkSub()];
+    kl.frame = CGRectMake(52, 15, 86, 16); [tile addSubview:kl];
+    UILabel *vl = [self ykLabel:v size:19 bold:YES color:YkMain()];
+    vl.frame = CGRectMake(14, 42, 124, 24);
+    vl.adjustsFontSizeToFitWidth = YES; vl.minimumScaleFactor = 0.7;
+    [tile addSubview:vl];
+    return tile;
+}
+
+#pragma mark - 顶部导航（左图标 / 右按钮随页切换）
 
 - (void)ykHeader {
     UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _W, NAV_H)];
     header.backgroundColor = YkBlue();
     [self addSubview:header];
 
-    UIButton *home = [UIButton buttonWithType:UIButtonTypeSystem];
-    home.frame = CGRectMake(4, 20, 44, 44);
-    [home setImage:[UIImage systemImageNamed:@"house.fill"] forState:UIControlStateNormal];
-    home.tintColor = [UIColor whiteColor];
-    [header addSubview:home];
+    UIView *left = [[UIView alloc] initWithFrame:CGRectMake(4, 20, 44, 44)];
+    [header addSubview:left];
+    _navLeftIcon = [[UIImageView alloc] initWithFrame:CGRectMake(8, 8, 28, 28)];
+    _navLeftIcon.contentMode = UIViewContentModeScaleAspectFit;
+    _navLeftIcon.tintColor = [UIColor whiteColor];
+    [left addSubview:_navLeftIcon];
 
     UILabel *title = [self ykLabel:@"远控 Pro" size:20 bold:YES color:[UIColor whiteColor]];
     title.textAlignment = NSTextAlignmentCenter;
+    title.tag = 9001;
     title.frame = CGRectMake(0, 30, _W, 26);
     [header addSubview:title];
+
+    _navRightBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    _navRightBtn.frame = CGRectMake(_W - 8 - 96, 27, 96, 30);
+    _navRightBtn.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.22];
+    _navRightBtn.layer.cornerRadius = 15.0;
+    _navRightBtn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    [_navRightBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    _navRightBtn.tintColor = [UIColor whiteColor];
+    [header addSubview:_navRightBtn];
+}
+
+- (UILabel *)ykNavTitle {
+    for (UIView *v in self.subviews) {
+        for (UIView *c in v.subviews) {
+            if ([c isKindOfClass:[UILabel class]] && c.tag == 9001) return (UILabel *)c;
+        }
+    }
+    return nil;
 }
 
 #pragma mark - 设备页
@@ -156,10 +197,10 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     for (NSInteger i = 0; i < 3; i++) {
         NSArray *r = rows[i];
         BOOL on = [r[3] intValue] == 1;
+        BOOL isDevice = [r[3] intValue] < 0;
         CGFloat y = 72 + i * 80;
-        CGFloat h = ([r[3] intValue] < 0) ? 72 : 68;
+        CGFloat h = isDevice ? 72 : 68;
         UIView *row = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, y, CARD_W - INNER_PAD * 2, h)];
-        // 开启 → 淡蓝底蓝边；关闭 → 白底灰边
         row.backgroundColor = on ? [YkBlue() colorWithAlphaComponent:0.06] : [UIColor whiteColor];
         row.layer.cornerRadius = 12.0;
         row.layer.borderWidth = 1.0;
@@ -167,24 +208,23 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
                                     : [UIColor colorWithWhite:0.93 alpha:1.0]).CGColor;
         [c1 addSubview:row];
 
-        CGFloat iconSize = ([r[3] intValue] < 0) ? 42 : 44;
-        CGFloat iconY = ([r[3] intValue] < 0) ? 15 : 12;
+        CGFloat iconSize = isDevice ? 42 : 44;
+        CGFloat iconY = isDevice ? 15 : 12;
         UIColor *tint = on ? YkBlue() : [UIColor colorWithWhite:0.62 alpha:1.0];
         [row addSubview:[self ykIconBox:CGRectMake(14, iconY, iconSize, iconSize)
                                  symbol:r[2] tint:tint glyph:24]];
 
         UILabel *tt = [self ykLabel:r[0] size:17 bold:YES color:YkMain()];
-        tt.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 17 : 15, 160, 22);
+        tt.frame = CGRectMake(68, isDevice ? 17 : 15, 160, 22);
         [row addSubview:tt];
         UILabel *ss = [self ykLabel:r[1] size:12 bold:NO color:YkSub()];
-        ss.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 40 : 38, 152, 16);
+        ss.frame = CGRectMake(68, isDevice ? 40 : 38, 152, 16);
         ss.adjustsFontSizeToFitWidth = YES;
         ss.minimumScaleFactor = 0.75;
         [row addSubview:ss];
 
-        if ([r[3] intValue] >= 0) {
-            UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(row.bounds.size.width - 51 - 12,
-                                                                      18, 51, 31)];
+        if (!isDevice) {
+            UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(row.bounds.size.width - 51 - 12, 18, 51, 31)];
             sw.on = on; sw.onTintColor = YkBlue();
             [row addSubview:sw];
         } else {
@@ -210,19 +250,8 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
                           [UIColor colorWithRed:1.0 green:0.97 blue:0.93 alpha:1.0]] ];
     for (NSInteger i = 0; i < 4; i++) {
         NSArray *t = tiles[i];
-        CGFloat tx = INNER_PAD + (i % 2) * 154;
-        CGFloat ty = 72 + (i / 2) * 92;
-        UIView *tile = [[UIView alloc] initWithFrame:CGRectMake(tx, ty, 142, 80)];
-        tile.backgroundColor = t[4];
-        tile.layer.cornerRadius = 12.0;
-        [c2 addSubview:tile];
-        [tile addSubview:[self ykIconBox:CGRectMake(12, 10, 32, 32) symbol:t[2] tint:t[3] glyph:17]];
-        UILabel *k = [self ykLabel:t[0] size:12 bold:NO color:YkSub()];
-        k.frame = CGRectMake(52, 15, 86, 16); [tile addSubview:k];
-        UILabel *v = [self ykLabel:t[1] size:19 bold:YES color:YkMain()];
-        v.frame = CGRectMake(14, 42, 124, 24); v.adjustsFontSizeToFitWidth = YES;
-        v.minimumScaleFactor = 0.7;
-        [tile addSubview:v];
+        CGRect fr = CGRectMake(INNER_PAD + (i % 2) * 154, 72 + (i / 2) * 92, 142, 80);
+        [c2 addSubview:[self ykTileAt:fr key:t[0] value:t[1] symbol:t[2] tint:t[3] bg:t[4]]];
     }
 
     // ---------- 卡片三：设备信息 ----------
@@ -233,20 +262,20 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     UILabel *n1 = [self ykLabel:@"设备名称" size:12 bold:NO color:YkSub()];
     n1.frame = CGRectMake(INNER_PAD, 72, 200, 17); [c3 addSubview:n1];
     UILabel *nv = [self ykLabel:@"iPhone" size:19 bold:YES color:YkMain()];
-    nv.frame = CGRectMake(INNER_PAD + 14, 97 + 14, 219, 24); [c3 addSubview:nv];
+    nv.frame = CGRectMake(INNER_PAD + 14, 111, 219, 24); [c3 addSubview:nv];
     UIButton *edit = [UIButton buttonWithType:UIButtonTypeSystem];
-    edit.frame = CGRectMake(CARD_W - INNER_PAD - 40 - 12, 97 + 8, 40, 40);
+    edit.frame = CGRectMake(CARD_W - INNER_PAD - 52, 105, 40, 40);
     [edit setImage:[UIImage systemImageNamed:@"pencil"] forState:UIControlStateNormal];
     edit.tintColor = YkMain(); [c3 addSubview:edit];
 
     UILabel *n2 = [self ykLabel:@"设备 ID" size:12 bold:NO color:YkSub()];
     n2.frame = CGRectMake(INNER_PAD, 165, 200, 17); [c3 addSubview:n2];
     UILabel *nv2 = [self ykLabel:@"1983fed10d4062e506291b023e92c27cc6e470bf" size:13 bold:NO color:YkMain()];
-    nv2.frame = CGRectMake(INNER_PAD + 14, 190 + 6, 219, 40);
+    nv2.frame = CGRectMake(INNER_PAD + 14, 196, 219, 40);
     nv2.numberOfLines = 2; nv2.lineBreakMode = NSLineBreakByCharWrapping;
     [c3 addSubview:nv2];
     UIButton *copy = [UIButton buttonWithType:UIButtonTypeSystem];
-    copy.frame = CGRectMake(CARD_W - INNER_PAD - 40 - 12, 190 + 6, 40, 40);
+    copy.frame = CGRectMake(CARD_W - INNER_PAD - 52, 196, 40, 40);
     [copy setImage:[UIImage systemImageNamed:@"doc.on.doc"] forState:UIControlStateNormal];
     copy.tintColor = YkMain(); [c3 addSubview:copy];
 
@@ -273,7 +302,7 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     _devScroll.contentSize = CGSizeMake(_W, 1158);
 }
 
-#pragma mark - 脚本页（文案取自原版 __cfstring）
+#pragma mark - 脚本页
 
 - (void)ykScriptPage {
     _scriptScroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, NAV_H, _W, _H - NAV_H)];
@@ -281,73 +310,57 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     _scriptScroll.hidden = YES;
     [self addSubview:_scriptScroll];
 
-    UIView *c1 = [self ykCard:CGRectMake(CARD_X, 20, CARD_W, 250)];
+    UIView *c1 = [self ykCard:CGRectMake(CARD_X, 20, CARD_W, 264)];
     [_scriptScroll addSubview:c1];
-    [self ykCardHeader:c1 title:@"脚本控制台" symbol:@"terminal" tint:YkBlue()];
+    [self ykCardHeader:c1 title:@"HTTP 服务" symbol:@"server.rack" tint:YkBlue()];
 
-    NSArray *kv = @[ @[@"HTTP 服务", @"检测中", @"当前状态", @"已开启"],
-                     @[@"本地端口", @"65322", @"脚本数量", @"0"] ];
-    for (NSInteger i = 0; i < 2; i++) {
-        NSArray *r = kv[i]; CGFloat y = 72 + i * 60;
-        UIView *tileA = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, y, 142, 52)];
-        UIView *tileB = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD + 154, y, 142, 52)];
-        for (UIView *t in @[tileA, tileB]) {
-            t.backgroundColor = [YkBlue() colorWithAlphaComponent:0.06];
-            t.layer.cornerRadius = 10.0;
-            [c1 addSubview:t];
-        }
-        UILabel *k1 = [self ykLabel:r[0] size:12 bold:NO color:YkSub()];
-        k1.frame = CGRectMake(10, 6, 120, 16); [tileA addSubview:k1];
-        UILabel *v1 = [self ykLabel:r[1] size:16 bold:YES color:YkMain()];
-        v1.frame = CGRectMake(10, 24, 120, 20); [tileA addSubview:v1];
-        UILabel *k2 = [self ykLabel:r[2] size:12 bold:NO color:YkSub()];
-        k2.frame = CGRectMake(10, 6, 120, 16); [tileB addSubview:k2];
-        UILabel *v2 = [self ykLabel:r[3] size:16 bold:YES color:YkMain()];
-        v2.frame = CGRectMake(10, 24, 120, 20); [tileB addSubview:v2];
-        if (i == 0) { _lblHttpStatus = v1; _lblState = v2; }
-        else        { _lblPort = v1; _lblScriptCount = v2; }
+    NSArray *tiles = @[ @[@"HTTP 服务", @"已开启", @"bolt.fill", YkGreen(),
+                          [UIColor colorWithRed:0.92 green:0.97 blue:0.93 alpha:1.0]],
+                        @[@"本地端口", @"65322", @"number", YkPurple(),
+                          [UIColor colorWithRed:0.94 green:0.93 blue:0.99 alpha:1.0]],
+                        @[@"当前状态", @"就绪", @"waveform.path.ecg", YkOrange(),
+                          [UIColor colorWithRed:1.0 green:0.95 blue:0.90 alpha:1.0]],
+                        @[@"脚本数量", @"-", @"doc.text.fill", YkMagenta(),
+                          [UIColor colorWithRed:0.97 green:0.93 blue:0.99 alpha:1.0]] ];
+    for (NSInteger i = 0; i < 4; i++) {
+        NSArray *t = tiles[i];
+        CGRect fr = CGRectMake(INNER_PAD + (i % 2) * 154, 72 + (i / 2) * 92, 142, 80);
+        UIView *tile = [self ykTileAt:fr key:t[0] value:t[1] symbol:t[2] tint:t[3] bg:t[4]];
+        [c1 addSubview:tile];
+        UILabel *v = (UILabel *)tile.subviews[2];
+        if (i == 0) _lblHttpStatus = v;
+        if (i == 1) _lblPort = v;
+        if (i == 2) _lblState = v;
+        if (i == 3) _lblScriptCount = v;
     }
-    UILabel *h1 = [self ykLabel:@"设备可通过互联网远程调试" size:12 bold:NO color:YkSub()];
-    h1.frame = CGRectMake(INNER_PAD, 200, 300, 18); [c1 addSubview:h1];
 
-    UIView *c2 = [self ykCard:CGRectMake(CARD_X, 290, CARD_W, 96)];
+    UIView *c2 = [self ykCard:CGRectMake(CARD_X, 368, CARD_W, 146)];
     [_scriptScroll addSubview:c2];
-    UILabel *t2 = [self ykLabel:@"远程调试安全状态" size:15 bold:YES color:YkMain()];
-    t2.frame = CGRectMake(INNER_PAD, 16, 220, 20); [c2 addSubview:t2];
-    UILabel *s2 = [self ykLabel:@"公网远程调试已开启" size:12 bold:NO color:YkSub()];
-    s2.frame = CGRectMake(INNER_PAD, 42, 300, 18); [c2 addSubview:s2];
-    UILabel *s3 = [self ykLabel:@"未连接" size:12 bold:NO color:YkSub()];
-    s3.frame = CGRectMake(INNER_PAD, 64, 120, 18); [c2 addSubview:s3];
-
-    UIView *c3 = [self ykCard:CGRectMake(CARD_X, 406, CARD_W, 160)];
-    [_scriptScroll addSubview:c3];
-    UILabel *t3 = [self ykLabel:@"脚本列表" size:17 bold:YES color:YkMain()];
-    t3.frame = CGRectMake(INNER_PAD, 16, 150, 22); [c3 addSubview:t3];
+    [self ykCardHeader:c2 title:@"脚本列表" symbol:@"list.bullet.rectangle" tint:YkMagenta()];
 
     UIButton *refresh = [UIButton buttonWithType:UIButtonTypeSystem];
-    refresh.frame = CGRectMake(CARD_W - INNER_PAD - 72, 14, 72, 30);
-    [refresh setTitle:@"刷新" forState:UIControlStateNormal];
-    refresh.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
-    refresh.backgroundColor = [YkBlue() colorWithAlphaComponent:0.10];
-    refresh.layer.cornerRadius = 9.0;
-    [refresh setTitleColor:YkBlue() forState:UIControlStateNormal];
+    refresh.frame = CGRectMake(CARD_W - INNER_PAD - 36, 20, 36, 36);
+    refresh.backgroundColor = [YkMagenta() colorWithAlphaComponent:0.12];
+    refresh.layer.cornerRadius = 18.0;
+    [refresh setImage:[UIImage systemImageNamed:@"arrow.clockwise"] forState:UIControlStateNormal];
+    refresh.tintColor = YkMagenta();
     [refresh addTarget:self action:@selector(ykReloadScripts) forControlEvents:UIControlEventTouchUpInside];
-    [c3 addSubview:refresh];
+    [c2 addSubview:refresh];
 
+    UIView *emptyBox = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 72, CARD_W - INNER_PAD * 2, 54)];
+    emptyBox.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1.0];
+    emptyBox.layer.cornerRadius = 10.0;
+    [c2 addSubview:emptyBox];
     UILabel *empty = [self ykLabel:@"暂无订阅脚本" size:13 bold:NO color:YkSub()];
     empty.textAlignment = NSTextAlignmentCenter;
-    empty.frame = CGRectMake(0, 96, CARD_W, 20);
-    [c3 addSubview:empty];
+    empty.frame = CGRectMake(0, 18, emptyBox.bounds.size.width, 18);
+    [emptyBox addSubview:empty];
     _lblScriptEmpty = empty;
-    UILabel *hint = [self ykLabel:@"刷新脚本列表" size:12 bold:NO color:YkSub()];
-    hint.textAlignment = NSTextAlignmentCenter;
-    hint.frame = CGRectMake(0, 120, CARD_W, 18);
-    [c3 addSubview:hint];
 
-    _scriptScroll.contentSize = CGSizeMake(_W, 600);
+    _scriptScroll.contentSize = CGSizeMake(_W, 534);
 }
 
-#pragma mark - 录制页（文案取自原版 __cfstring）
+#pragma mark - 录制页
 
 - (void)ykRecordPage {
     _recordScroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, NAV_H, _W, _H - NAV_H)];
@@ -355,55 +368,80 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     _recordScroll.hidden = YES;
     [self addSubview:_recordScroll];
 
-    UIView *c1 = [self ykCard:CGRectMake(CARD_X, 20, CARD_W, 140)];
-    [_recordScroll addSubview:c1];
-    [self ykCardHeader:c1 title:@"录制中心" symbol:@"record.circle" tint:YkRed()];
+    UIView *card = [self ykCard:CGRectMake(CARD_X, 20, CARD_W, 554)];
+    [_recordScroll addSubview:card];
+    [self ykCardHeader:card title:@"录制向导" symbol:@"record.circle" tint:YkRed()];
 
-    UILabel *h1 = [self ykLabel:@"点下方按钮后，App 会退到桌面，只留下 44x44 红色录制小球。"
-                            size:12 bold:NO color:YkSub()];
-    h1.frame = CGRectMake(INNER_PAD, 64, CARD_W - INNER_PAD * 2 - 8, 34); h1.numberOfLines = 2;
-    [c1 addSubview:h1];
+    UILabel *sub = [self ykLabel:@"录制流程怎么用" size:17 bold:YES color:YkMain()];
+    sub.frame = CGRectMake(INNER_PAD, 72, 295, 27);
+    [card addSubview:sub];
 
-    UIButton *start = [UIButton buttonWithType:UIButtonTypeSystem];
-    start.frame = CGRectMake(CARD_W - INNER_PAD - 100, 96, 100, 32);
-    [start setTitle:@"开始录制" forState:UIControlStateNormal];
-    start.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
-    start.backgroundColor = YkBlue();
-    start.layer.cornerRadius = 10.0;
-    [start setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    [c1 addSubview:start];
-
-    UIView *c2 = [self ykCard:CGRectMake(CARD_X, 180, CARD_W, 160)];
-    [_recordScroll addSubview:c2];
-    UILabel *t2 = [self ykLabel:@"我的录制" size:17 bold:YES color:YkMain()];
-    t2.frame = CGRectMake(INNER_PAD, 16, 150, 22); [c2 addSubview:t2];
-    UILabel *empty = [self ykLabel:@"还没有录制脚本" size:13 bold:NO color:YkSub()];
-    empty.textAlignment = NSTextAlignmentCenter;
-    empty.frame = CGRectMake(0, 84, CARD_W, 20);
-    [c2 addSubview:empty];
-    UILabel *h2 = [self ykLabel:@"录制向导" size:12 bold:NO color:YkSub()];
-    h2.textAlignment = NSTextAlignmentCenter;
-    h2.frame = CGRectMake(0, 110, CARD_W, 18);
-    [c2 addSubview:h2];
-
-    UIView *c3 = [self ykCard:CGRectMake(CARD_X, 360, CARD_W, 96)];
-    [_recordScroll addSubview:c3];
-    UILabel *t3 = [self ykLabel:@"选择回放次数" size:15 bold:YES color:YkMain()];
-    t3.frame = CGRectMake(INNER_PAD, 16, 200, 20); [c3 addSubview:t3];
-    NSArray *opts = @[@"回放 1 次", @"回放 3 次", @"回放 10 次"];
-    for (NSInteger i = 0; i < 3; i++) {
-        UILabel *o = [self ykLabel:opts[i] size:12 bold:NO color:[UIColor whiteColor]];
-        o.textAlignment = NSTextAlignmentCenter;
-        o.backgroundColor = [YkBlue() colorWithAlphaComponent:0.85];
-        o.layer.cornerRadius = 8.0; o.clipsToBounds = YES;
-        o.frame = CGRectMake(INNER_PAD + i * 100, 52, 90, 28);
-        [c3 addSubview:o];
+    NSArray *steps = @[ @[@"1. 打开小球，回到桌面", @"点下方按钮后，App 会退到桌面，只留下\n44x44 红色录制小球。",
+                          @"record.circle", YkRed(),
+                          [UIColor colorWithRed:0.99 green:0.93 blue:0.94 alpha:1.0]],
+                        @[@"2. 拖动或点开小球", @"小球可拖动，轻点可展开；操作小球和菜单不\n会写进录制。",
+                          @"hand.point.up.left.fill", YkBlue(),
+                          [UIColor colorWithRed:0.92 green:0.95 blue:1.0 alpha:1.0]],
+                        @[@"3. 开始、暂停、继续", @"点「开始」或按音量 + 后先倒计时；录制中可\n暂停，再点继续接着录。",
+                          @"play.fill", YkGreen(),
+                          [UIColor colorWithRed:0.92 green:0.97 blue:0.94 alpha:1.0]],
+                        @[@"4. 完成并命名保存", @"点「完成」或按音量 - 会回到 App 命名；留\n空就按当前时间保存。",
+                          @"checkmark.circle.fill", YkOrange(),
+                          [UIColor colorWithRed:1.0 green:0.96 blue:0.90 alpha:1.0]] ];
+    for (NSInteger i = 0; i < 4; i++) {
+        NSArray *s = steps[i];
+        UIView *row = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 108 + i * 71,
+                                                              CARD_W - INNER_PAD * 2, 62)];
+        row.backgroundColor = s[4];
+        row.layer.cornerRadius = 12.0;
+        [card addSubview:row];
+        [row addSubview:[self ykIconBox:CGRectMake(10, 13, 36, 36) symbol:s[2] tint:s[3] glyph:18]];
+        UILabel *t = [self ykLabel:s[0] size:15 bold:YES color:YkMain()];
+        t.frame = CGRectMake(56, 8, 227, 19); [row addSubview:t];
+        UILabel *d = [self ykLabel:s[1] size:12 bold:NO color:YkSub()];
+        d.frame = CGRectMake(56, 27, 227, 30); d.numberOfLines = 2; [row addSubview:d];
     }
 
-    _recordScroll.contentSize = CGSizeMake(_W, 500);
+    UIView *sc = [[UIView alloc] initWithFrame:CGRectMake(INNER_PAD, 392, CARD_W - INNER_PAD * 2, 70)];
+    sc.backgroundColor = [UIColor colorWithRed:0.99 green:0.94 blue:0.95 alpha:1.0];
+    sc.layer.cornerRadius = 12.0;
+    [card addSubview:sc];
+    UIImageView *vol = [[UIImageView alloc] initWithFrame:CGRectMake(12, 12, 18, 15)];
+    vol.image = [UIImage systemImageNamed:@"speaker.wave.2.fill"];
+    vol.tintColor = YkRed();
+    vol.contentMode = UIViewContentModeScaleAspectFit;
+    [sc addSubview:vol];
+    UILabel *vl = [self ykLabel:@"实体按键快捷操作" size:13 bold:YES color:YkMain()];
+    vl.frame = CGRectMake(38, 10, 200, 18); [sc addSubview:vl];
+
+    NSArray *pills = @[ @[@"音量 +", @"开始录制", YkGreen()], @[@"音量 -", @"完成并命名", YkRed()] ];
+    for (NSInteger i = 0; i < 2; i++) {
+        NSArray *p = pills[i];
+        UIView *pill = [[UIView alloc] initWithFrame:CGRectMake(12 + i * 140, 34, 132, 28)];
+        pill.backgroundColor = [UIColor whiteColor];
+        pill.layer.cornerRadius = 14.0;
+        [sc addSubview:pill];
+        UILabel *a = [self ykLabel:p[0] size:12 bold:YES color:p[2]];
+        a.frame = CGRectMake(10, 6, 52, 16); [pill addSubview:a];
+        UILabel *b = [self ykLabel:p[1] size:11 bold:NO color:YkMain()];
+        b.frame = CGRectMake(66, 6, 60, 16); [pill addSubview:b];
+    }
+
+    UIButton *rec = [UIButton buttonWithType:UIButtonTypeSystem];
+    rec.frame = CGRectMake(INNER_PAD, 478, CARD_W - INNER_PAD * 2, 56);
+    rec.backgroundColor = [UIColor colorWithRed:1.0 green:0.23 blue:0.19 alpha:1.0];
+    rec.layer.cornerRadius = 28.0;
+    [rec setTitle:@"  打开录制小球" forState:UIControlStateNormal];
+    [rec setImage:[UIImage systemImageNamed:@"record.circle"] forState:UIControlStateNormal];
+    rec.titleLabel.font = [UIFont boldSystemFontOfSize:17];
+    [rec setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    rec.tintColor = [UIColor whiteColor];
+    [card addSubview:rec];
+
+    _recordScroll.contentSize = CGSizeMake(_W, 594);
 }
 
-#pragma mark - 底部导航（悬浮胶囊）
+#pragma mark - 底部导航（悬浮胶囊 + 选中态高亮）
 
 - (void)ykBottom {
     _bottomBar = [[UIView alloc] initWithFrame:CGRectMake(0, _H - 68, _W, 68)];
@@ -419,12 +457,17 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     pill.layer.shadowOffset = CGSizeMake(0, 2);
     [_bottomBar addSubview:pill];
 
+    _tabCapsule = [[UIView alloc] initWithFrame:CGRectMake(30, 5, 94, 50)];
+    _tabCapsule.backgroundColor = [YkBlue() colorWithAlphaComponent:0.13];
+    _tabCapsule.layer.cornerRadius = 25.0;
+    [pill addSubview:_tabCapsule];
+
     _tabIcons = [NSMutableArray array];
     _tabLabels = [NSMutableArray array];
 
     NSArray *names = @[@"设备", @"脚本", @"录制"];
     NSArray *icons = @[@"iphone", @"terminal", @"record.circle"];
-    CGFloat iw = pill.bounds.size.width / 3.0;
+    CGFloat iw = (_W - 44) / 3.0;
     for (NSInteger i = 0; i < 3; i++) {
         UIButton *hit = [UIButton buttonWithType:UIButtonTypeCustom];
         hit.frame = CGRectMake(i * iw, 0, iw, 60);
@@ -446,15 +489,32 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
         [pill addSubview:l];
         [_tabLabels addObject:l];
     }
-    [self ykSelectTab:0];
 }
 
-// 选中态：图标与文字同色（原版选中为蓝，未选中为灰）
 - (void)ykSelectTab:(NSInteger)idx {
     for (NSInteger i = 0; i < _tabIcons.count; i++) {
         UIColor *c = (i == idx) ? YkTint() : YkSub();
         ((UIImageView *)_tabIcons[i]).tintColor = c;
         ((UILabel *)_tabLabels[i]).textColor = c;
+    }
+    CGFloat iw = (_W - 44) / 3.0;
+    _tabCapsule.frame = CGRectMake(idx * iw + (iw - 94) / 2.0, 5, 94, 50);
+
+    UILabel *title = [self ykNavTitle];
+    _navLeftIcon.image = nil;
+    _navRightBtn.hidden = YES;
+    [_navRightBtn setTitle:@"" forState:UIControlStateNormal];
+
+    if (idx == 0) {
+        title.text = @"远控 Pro";
+        _navLeftIcon.image = [UIImage systemImageNamed:@"house.fill"];
+    } else if (idx == 1) {
+        title.text = @"脚本控制台";
+        _navLeftIcon.image = [UIImage systemImageNamed:@"gearshape.fill"];
+        _navRightBtn.hidden = NO;
+        [_navRightBtn setTitle:@"＋ 添加脚本" forState:UIControlStateNormal];
+    } else {
+        title.text = @"录制中心";
     }
 }
 
@@ -472,15 +532,15 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     [self ykHTTP:@"/health" done:^(NSDictionary *j) {
         __strong typeof(ws) sf = ws; if (!sf) return;
         BOOL ready = [j[@"value"][@"ready"] boolValue];
-        sf.lblHttpStatus.text = ready ? @"正常" : @"异常";
-        sf.lblHttpStatus.textColor = ready ? YkTint() : [UIColor systemRedColor];
+        sf.lblHttpStatus.text = ready ? @"已开启" : @"已关闭";
+        sf.lblHttpStatus.textColor = ready ? YkGreen() : [UIColor systemRedColor];
+        sf.lblState.text = ready ? @"就绪" : @"异常";
         sf.lblPort.text = [NSString stringWithFormat:@"%@", j[@"value"][@"port"] ?: @"—"];
-        sf.lblState.text = ready ? @"已开启" : @"已关闭";
     }];
     [self ykHTTP:@"/executor/scripts" done:^(NSDictionary *j) {
         __strong typeof(ws) sf = ws; if (!sf) return;
         NSArray *list = j[@"value"][@"scripts"];
-        sf.lblScriptCount.text = [NSString stringWithFormat:@"%lu", (unsigned long)list.count];
+        sf.lblScriptCount.text = list.count ? [NSString stringWithFormat:@"%lu", (unsigned long)list.count] : @"-";
         sf.lblScriptEmpty.text = list.count ? [NSString stringWithFormat:@"共 %lu 个脚本", (unsigned long)list.count]
                                             : @"暂无订阅脚本";
     }];
@@ -496,10 +556,11 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
 }
 
 - (void)ykTab:(UIButton *)sender {
-    [self ykSelectTab:sender.tag];
     _devScroll.hidden    = (sender.tag != 0);
     _scriptScroll.hidden = (sender.tag != 1);
     _recordScroll.hidden = (sender.tag != 2);
+    if (sender.tag == 1) [self ykReloadScripts];
+    [self ykSelectTab:sender.tag];
 }
 
 @end
