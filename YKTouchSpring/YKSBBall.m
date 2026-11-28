@@ -315,6 +315,10 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
 }
 
 - (void)menuTap:(UIButton *)b {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self menuTap:b]; });
+        return;
+    }
     NSInteger i = b.tag - 100;
     YKBallRecorder *rec = [YKBallRecorder shared];
     if (i == 0) {            // 开始
@@ -371,13 +375,19 @@ static CFDataRef YKBallPortCallback(CFMessagePortRef port, SInt32 msgid, CFDataR
     NSString *action = req[@"action"] ?: @"status";
     YKBallController *bc = [YKBallController shared];
     NSMutableDictionary *resp = [NSMutableDictionary dictionary];
-    if ([action isEqualToString:@"show"]) { [bc show]; resp[@"ok"] = @YES; }
-    else if ([action isEqualToString:@"hide"]) { [bc hide]; resp[@"ok"] = @YES; }
-    else if ([action isEqualToString:@"toggle"]) {
-        if ([bc isVisible]) [bc hide]; else [bc show];
-        resp[@"ok"] = @YES;
-    }
-    resp[@"visible"] = @([bc isVisible]);
+    // 端口回调跑在自建线程上，SpringBoard 开了 CA_ASSERT_MAIN_THREAD_TRANSACTIONS，
+    // 任何 UIWindow/UIView 操作必须回主线程，否则直接 abort。
+    void (^work)(void) = ^{
+        if ([action isEqualToString:@"show"]) { [bc show]; resp[@"ok"] = @YES; }
+        else if ([action isEqualToString:@"hide"]) { [bc hide]; resp[@"ok"] = @YES; }
+        else if ([action isEqualToString:@"toggle"]) {
+            if ([bc isVisible]) [bc hide]; else [bc show];
+            resp[@"ok"] = @YES;
+        }
+        resp[@"visible"] = @([bc isVisible]);
+    };
+    if ([NSThread isMainThread]) work();
+    else dispatch_sync(dispatch_get_main_queue(), work);
     NSData *out = [NSJSONSerialization dataWithJSONObject:resp options:0 error:NULL];
     return (__bridge_retained CFDataRef)out;
 }
