@@ -46,6 +46,22 @@ static void *YkSym(const char *name) {
     return p;
 }
 
+
+// 原版 startTouchHIDEventMonitorIfNeeded：先注册回调，让 client 成为"活跃事件源"
+static uint64_t gYkLastRealSender = 0;
+static void YkHIDEventCallback(void *target, void *refcon, void *service, IOHIDEventRef event) {
+    // 目的不是处理事件，而是让 client 保持订阅状态
+    (void)target; (void)service;
+    if (event) {
+        void *fg = YkSym("IOHIDEventGetSenderID");
+        if (fg) {
+            uint64_t sid = ((uint64_t (*)(IOHIDEventRef))fg)(event);
+            if (sid) gYkLastRealSender = sid;
+        }
+    }
+    (void)refcon;
+}
+
 static IOHIDEventSystemClientRef YkHIDClientMain(void) {
     // 必须只在主线程调用：client 要绑到主 runloop，否则 Dispatch 会被静默丢弃
     static IOHIDEventSystemClientRef client = NULL;
@@ -61,9 +77,16 @@ static IOHIDEventSystemClientRef YkHIDClientMain(void) {
         }
     }
     if (client) {
+        // 原版：先 RegisterEventCallback，再 Schedule(CommonModes)
+        void *hr = YkSym("IOHIDEventSystemClientRegisterEventCallback");
+        if (hr) {
+            ((void (*)(IOHIDEventSystemClientRef, void *, void *, uint32_t))hr)(
+                        client, (void *)YkHIDEventCallback, NULL, 0);
+            fprintf(stderr, "[touch] RegisterEventCallback done\n"); fflush(stderr);
+        }
         void *hs = YkSym("IOHIDEventSystemClientScheduleWithRunLoop");
         if (hs) ((void (*)(IOHIDEventSystemClientRef, CFRunLoopRef, CFStringRef))hs)(
-                    client, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+                    client, CFRunLoopGetMain(), kCFRunLoopCommonModes);
         fprintf(stderr, "[touch] client(main)=%p\n", (void *)client); fflush(stderr);
     } else {
         fprintf(stderr, "[touch] client=NULL\n"); fflush(stderr);
