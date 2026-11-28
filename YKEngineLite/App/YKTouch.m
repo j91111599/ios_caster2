@@ -1,4 +1,5 @@
 static int gYkEpoch = 0;
+static void YkTryRecordEvent(IOHIDEventRef event);
 int gYkClientType = 2;
 #include <stdio.h>
 #import <mach/mach_time.h>
