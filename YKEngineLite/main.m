@@ -84,6 +84,21 @@ extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 #pragma mark - 配置
 
 
+
+static HTTPServer *gYKServiceServer = nil;
+static volatile int gYKServiceRunning = 1;
+
+BOOL YkServiceRunning(void) { return gYKServiceRunning != 0; }
+void YkSetServiceRunning(BOOL on) {
+    if (on && !gYKServiceRunning && gYKServiceServer) {
+        NSError *e = nil;
+        if ([gYKServiceServer start:&e]) gYKServiceRunning = 1;
+    } else if (!on && gYKServiceRunning && gYKServiceServer) {
+        [gYKServiceServer stop];
+        gYKServiceRunning = 0;
+    }
+}
+
 // iOS 上 /bin/sh 未必存在（本机 rootfs 只读且 /bin 里只有 df/ps），
 // 这里按候选列表找可用的 shell（roothide 的 jbroot 里有 usr/bin/sh）。
 static NSString *YkShellPath(void) {
