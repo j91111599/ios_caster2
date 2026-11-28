@@ -205,7 +205,7 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     //   began->3(Range|Touch)  moved->4(Position)  ended->0
     // 原版实测：父事件 mask 恒为 2 (Touch)，range 恒为 0，坐标恒为 0,0
     uint32_t mask = 2;
-    int      touch = (phase == 2) ? 0 : 1;
+    int      touch = (phase == 2) ? 0 : 1;   // down=1 up=0
     int      range = 0;   // 原版父事件 range 恒为 0
     double   press = (phase == 2) ? 0.0 : (pressure > 0 ? pressure : 1.0);
 
@@ -229,24 +229,37 @@ static void YkInject(int phase, double x, double y, uint32_t finger, double pres
     fprintf(stderr, "[touch] step3 before FingerEvent\n"); fflush(stderr);
     // 完全对齐原版 YKPointRadius.m 的写法：
 //   index = 0, z = y, 并在 AppendEvent 之前补齐 5 个物理属性
+    // 原版实测（探针逐字段对比）：
+    //   CHILD: mask=3 range=1/0 touch=1/0 idx=2 ident=2 disp=0
+    //          x,y 是归一化 0~1（不是像素！） z=0 press=0
+    CGSize scr = [UIScreen mainScreen].bounds.size;
+    double nx = (scr.width  > 0) ? x / (scr.width  * [UIScreen mainScreen].scale) : x;
+    double ny = (scr.height > 0) ? y / (scr.height * [UIScreen mainScreen].scale) : y;
+    if (nx > 1.0) nx = 1.0; if (ny > 1.0) ny = 1.0;
+
     IOHIDEventRef fingerEv = ((YkFingerFn)ff)(kCFAllocatorDefault, ts,
-                                              0,            // index  ← 原版固定 0
-                                              1,            // identity
-                                              mask, 0,
-                                              x, y,
-                                              y,            // z       ← 原版用 y
-                                              press, 0.0, range, touch, 0);
+                                              2,            // index
+                                              2,            // identity
+                                              3,            // mask = Range|Touch
+                                              0,
+                                              nx, ny,       // 归一化坐标
+                                              0.0,          // z = 0
+                                              0.0,          // tipPressure = 0
+                                              0.0,          // twist
+                                              (phase == 2) ? 0 : 1,   // range
+                                              touch,        // touch
+                                              0);
     if (fingerEv) {
         void *sf = YkSym("IOHIDEventSetFloatValue");
         if (sf) {
             void (*SetF)(IOHIDEventRef, uint32_t, double) = (void (*)(IOHIDEventRef, uint32_t, double))sf;
-            SetF(fingerEv, 0xb0011, 1.0);   // Quality
-            SetF(fingerEv, 0xb0012, 1.0);   // Density
-            SetF(fingerEv, 0xb0013, 0.0);   // Irregularity
-            SetF(fingerEv, 0xb0014, 5.0);   // MajorRadius
-            SetF(fingerEv, 0xb0015, 5.0);   // MinorRadius
-            fprintf(stderr, "[touch] finger physics set\n"); fflush(stderr);
+            SetF(fingerEv, 0xb0011, 1.0);
+            SetF(fingerEv, 0xb0012, 1.0);
+            SetF(fingerEv, 0xb0013, 0.0);
+            SetF(fingerEv, 0xb0014, 5.0);
+            SetF(fingerEv, 0xb0015, 5.0);
         }
+        fprintf(stderr, "[touch] finger nx=%.3f ny=%.3f touch=%d\n", nx, ny, touch); fflush(stderr);
         if (fa) ((YkAppendFn)fa)(hand, fingerEv, 0);
         fprintf(stderr, "[touch] step5 appended\n"); fflush(stderr);
         CFRelease(fingerEv);
