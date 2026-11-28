@@ -84,31 +84,38 @@ extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 #pragma mark - 配置
 
 
-// system() 在 iOS SDK 中被标记不可用，用 posix_spawn 走 /bin/sh -c
-static void YkRunCmd(NSString *cmd) {
-    pid_t pid = 0;
-    const char *sh = "/bin/sh";
-    char *argv[] = { (char *)sh, (char *)"-c", (char *)cmd.UTF8String, NULL };
-    posix_spawn(&pid, sh, NULL, NULL, argv, environ);
-    if (pid > 0) { int st = 0; waitpid(pid, &st, 0); }
+// iOS 上 /bin/sh 未必存在（本机 rootfs 只读且 /bin 里只有 df/ps），
+// 这里按候选列表找可用的 shell（roothide 的 jbroot 里有 usr/bin/sh）。
+static NSString *YkShellPath(void) {
+    static NSString *cached = nil;
+    if (cached) return cached;
+    NSMutableArray *cands = [NSMutableArray array];
+    NSString *env = NSProcessInfo.processInfo.environment[@"YK_SHELL"];
+    if (env.length) [cands addObject:env];
+    NSArray *roots = [[NSFileManager defaultManager]
+                      contentsOfDirectoryAtPath:@"/var/containers/Bundle/Application" error:NULL];
+    for (NSString *d in roots) {
+        if (![d hasPrefix:@".jbroot-"]) continue;
+        [cands addObject:[NSString stringWithFormat:
+            @"/var/containers/Bundle/Application/%@/usr/bin/sh", d]];
+        [cands addObject:[NSString stringWithFormat:
+            @"/var/containers/Bundle/Application/%@/usr/bin/bash", d]];
+    }
+    [cands addObjectsFromArray:@[@"/var/jb/usr/bin/sh", @"/usr/bin/sh", @"/bin/sh",
+                                 @"/var/jb/usr/bin/bash"]];
+    for (NSString *c in cands) {
+        if ([[NSFileManager defaultManager] isExecutableFileAtPath:c]) { cached = c; break; }
+    }
+    return cached;
 }
 
-
-
-static HTTPServer *gYKServiceServer = nil;
-static volatile int gYKServiceRunning = 1;
-
-BOOL YkServiceRunning(void);
-void YkSetServiceRunning(BOOL on);
-BOOL YkServiceRunning(void) { return gYKServiceRunning != 0; }
-void YkSetServiceRunning(BOOL on) {
-    if (on && !gYKServiceRunning && gYKServiceServer) {
-        NSError *e = nil;
-        if ([gYKServiceServer start:&e]) gYKServiceRunning = 1;
-    } else if (!on && gYKServiceRunning && gYKServiceServer) {
-        [gYKServiceServer stop];
-        gYKServiceRunning = 0;
-    }
+static void YkRunCmd(NSString *cmd) {
+    NSString *sh = YkShellPath();
+    if (!sh) return;
+    pid_t pid = 0;
+    char *argv[] = { (char *)sh.UTF8String, (char *)"-c", (char *)cmd.UTF8String, NULL };
+    posix_spawn(&pid, sh.UTF8String, NULL, NULL, argv, environ);
+    if (pid > 0) { int st = 0; waitpid(pid, &st, 0); }
 }
 
 static uint16_t YKListenPort(void) {
