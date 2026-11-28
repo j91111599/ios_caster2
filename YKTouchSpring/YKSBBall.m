@@ -186,7 +186,6 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
 + (instancetype)shared;
 - (void)show;
 - (void)hide;
-- (void)toggle;
 - (BOOL)isVisible;
 @end
 
