@@ -53,13 +53,36 @@ static void YKHandleHID(id self, SEL _cmd, id ev) {
 }
 
 static GenericFn gOrigWinSend = NULL;
+
+// 用 NSInvocation 调 -locationInWindow:（返回 CGPoint，不能走 performSelector）
+static CGPoint YKLocInWindow(UITouch *t) {
+    CGPoint p = CGPointZero;
+    SEL sel = NSSelectorFromString(@"locationInWindow");
+    if (![t respondsToSelector:sel]) return p;
+    NSMethodSignature *sig = [t methodSignatureForSelector:sel];
+    if (!sig) return p;
+    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+    [inv setTarget:t];
+    [inv setSelector:sel];
+    [inv invoke];
+    if (sig.methodReturnLength == sizeof(CGPoint)) [inv getReturnValue:&p];
+    return p;
+}
+
 static void YKWinSend(id self, SEL _cmd, id ev) {
     @autoreleasepool {
         id touches = nil;
         @try { touches = [ev allTouches]; } @catch (__unused NSException *x) { }
         NSUInteger n = 0;
         if ([touches respondsToSelector:@selector(count)]) n = [(NSSet *)touches count];
-        if (n) SBLog(@"WINSEND touches=%lu", (unsigned long)n);
+        if (n) {
+            NSMutableString *d = [NSMutableString string];
+            for (UITouch *t in (NSSet *)touches) {
+                CGPoint p = YKLocInWindow(t);
+                [d appendFormat:@"[p=%ld x=%.1f y=%.1f] ", (long)t.phase, p.x, p.y];
+            }
+            SBLog(@"WINSEND n=%lu %@", (unsigned long)n, d);
+        }
     }
     if (gOrigWinSend) gOrigWinSend(self, _cmd, ev);
 }
