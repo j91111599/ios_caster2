@@ -31,7 +31,14 @@ static void YKSendEventHook(id self, SEL _cmd, UIEvent *event) {
         if (touches.count > 0) {
             NSMutableString *desc = [NSMutableString string];
             for (UITouch *t in touches) {
-                CGPoint p = [t locationInWindow:nil];
+                CGPoint p = CGPointZero;
+                if ([t respondsToSelector:NSSelectorFromString(@"locationInWindow")]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                    NSValue *v = [t performSelector:NSSelectorFromString(@"locationInWindow")];
+#pragma clang diagnostic pop
+                    if ([v isKindOfClass:[NSValue class]]) p = [v CGPointValue];
+                }
                 [desc appendFormat:@"[phase=%ld x=%.1f y=%.1f] ",
                                    (long)t.phase, p.x, p.y];
             }
