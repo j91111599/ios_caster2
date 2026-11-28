@@ -103,6 +103,8 @@ static void YKSBProbeInit(void){
         {
             void *hMS = NULL;
             void *sub = dlopen("/var/jb/usr/lib/libsubstrate.dylib", RTLD_LAZY);
+            if (!sub) sub = dlopen("/var/jb/usr/lib/ellekit/libinjector.dylib", RTLD_LAZY);
+            if (!sub) sub = dlopen("/var/jb/usr/lib/ellekit/MobileSafety.dylib", RTLD_LAZY);
             if (!sub) sub = dlopen("/usr/lib/libsubstrate.dylib", RTLD_LAZY);
             if (sub) hMS = dlsym(sub, "MSHookFunction");
             if (!hMS) {
