@@ -177,9 +177,9 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
         tt.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 17 : 15, 160, 22);
         [row addSubview:tt];
         UILabel *ss = [self ykLabel:r[1] size:12 bold:NO color:YkSub()];
-        ss.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 40 : 38, 196, 16);
+        ss.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 40 : 38, 152, 16);
         ss.adjustsFontSizeToFitWidth = YES;
-        ss.minimumScaleFactor = 0.8;
+        ss.minimumScaleFactor = 0.75;
         [row addSubview:ss];
 
         if ([r[3] intValue] >= 0) {
@@ -411,7 +411,7 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     [self addSubview:_bottomBar];
 
     UIView *pill = [[UIView alloc] initWithFrame:CGRectMake(22, 0, _W - 44, 60)];
-    pill.backgroundColor = [UIColor colorWithWhite:0.99 alpha:0.94];
+    pill.backgroundColor = [UIColor whiteColor];
     pill.layer.cornerRadius = 30.0;
     pill.layer.shadowColor = [UIColor blackColor].CGColor;
     pill.layer.shadowOpacity = 0.06;
