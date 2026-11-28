@@ -75,6 +75,8 @@ extern NSDictionary *YkTouchSequence(NSArray *points, double defaultGapMs);
 @end
 
 
+static void YkServiceWatcher(void);
+
 @interface YKServiceWatcherRunner : NSObject
 + (void)ykServiceWatcherTrampoline;
 @end
