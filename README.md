@@ -192,8 +192,11 @@ IOHIDEventCreateDigitizerEvent      → 父事件（transducerType=3 Hand, mask=
 `0x8000000817319371`）。senderID 为 0 时 backboardd 照样转发、monitor 也收得到，
 但 SpringBoard 不把它派发给任何窗口 —— 表现为「注入成功但屏幕毫无反应」。
 
-sender 解析顺序：请求体 `sender` > `/var/mobile/Library/YKEngineLite/sender.txt`
-> 枚举 digitizer 服务 > 原版常量。**不要在每个请求里清 0**。
+sender 解析顺序：请求体 `sender` > `config.plist` 的 `senderId` > 原版常量
+`0x8000000817319371`。**不要在每个请求里清 0**，也不要用「枚举到的第一个 digitizer
+服务」——那常常是 SPU/指纹服务，拿它当 sender 会让事件被丢弃（实测还可能是随机值）。
+需要覆盖时在 `/var/mobile/Library/YKEngineLite/config.plist` 写 `senderId`，或请求里传
+`sender`；只有显式传 `sender:1` 才会去枚举服务。
 
 Home 键走键盘事件：`IOHIDEventCreateKeyboardEvent(alloc, ts, 0x0C, 0x40, down, 0)`
 （page 0x0C / usage 0x40 = Consumer Menu），同样需要 SetSenderID。
@@ -204,15 +207,27 @@ Home 键走键盘事件：`IOHIDEventCreateKeyboardEvent(alloc, ts, 0x0C, 0x40, 
 |---|---|
 | `POST /touch/tap` | 单击（down/up 两帧，60 ms） |
 | `POST /touch/doubleTap` | 双击（gap 默认 80 ms） |
-| `POST /touch/longPress` | 长按（`duration` 秒） |
+| `POST /touch/longPress` | 长按（`duration` 秒；按住期间每 30 ms 补一帧 move，否则手势识别器不触发） |
 | `POST /touch/swipe` | 滑动（`toX/toY/duration/steps`） |
-| `POST /touch/pinch` | 双指捏合（`startPoints`/`endPoints` 各两点） |
+| `POST /touch/pinch` | 双指捏合（`startPoints`/`endPoints` 各两点；单帧内两个子事件，index 从 1 编号） |
+| `POST /touch/multi` | 双指按住（`x/y/x2/y2/duration`） |
 | `POST /touch/sequence` | 任意序列（`points:[{x,y,touch,finger,delayMs,type}]`） |
 | `POST /touch/home` | Home 键（`count`=2 即双击 Home，`hold` 秒数） |
 | `POST /touch/showTouches` | Lite 不含可视化层，返回 `supported:false` |
 | `POST /touch/ping` / `/touch/capture` / `/touch/arm` / `/touch/status` / `/touch/replay` | 诊断与录制回放 |
 
 坐标一律是**像素**（750×1334 设备就是 750×1334 空间），注入前才归一化到 0~1。
+
+真机验收（iPhone9,1 / iOS 15.8.8，2026-11-28，v23.4.0）：
+
+| 动作 | 结果 |
+|---|---|
+| `tap 450 975`（桌面「设置」图标） | 打开设置 ✅ |
+| `home` | 回桌面 / 退出编辑态 ✅ |
+| `longPress 450 975` | 图标进入抖动编辑态 ✅ |
+| `swipe 700→60` | 设置列表滚动 / 桌面翻页 ✅ |
+| `pinch`（照片详情页放大、缩小） | 两个方向都生效 ✅ |
+| `sequence`（41 帧按住） | 等价长按 ✅ |
 
 ---
 
