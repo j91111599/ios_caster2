@@ -123,8 +123,10 @@ static void *gMonRef = NULL;
     if (!_recording) return;
     double dur = [self elapsed];   // 必须在清 _recording 之前算
     _recording = NO;
-    NSArray *steps = [_steps copy];
+    NSMutableArray *steps = [_steps mutableCopy];
     if (!steps.count) { SBLog(@"finish: no steps"); return; }
+    NSDictionary *last = steps.lastObject;
+    [steps addObject:@{ @"x": last[@"x"], @"y": last[@"y"], @"touch": @0, @"delayMs": @16 }];
 
     NSDateFormatter *df = [NSDateFormatter new];
     df.dateFormat = @"MM月dd日 HH:mm";
@@ -179,15 +181,12 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
         int64_t r = ((int64_t (*)(void *, uint32_t))fg)(event, 0xB0008);
         range = r ? 1 : 0;
     }
-    if (!range) {             // 抬起：记一个收尾点
-        if (nx > 0 || ny > 0) {
-            [rec.steps addObject:@{ @"x": @(nx * 750), @"y": @(ny * 1334),
-                                    @"touch": @0, @"delayMs": @16 }];
-        }
-        return;
-    }
+    // 合成事件（我们自己的注入器）range/touch 标志不可靠，统一按「按住移动」记录，
+    // 收尾的抬起点在 finish 里补一个，回放时按拖动轨迹注入。
+    if (nx <= 1.0 && ny <= 1.0) return;   // 无坐标的噪声帧丢弃
     [rec.steps addObject:@{ @"x": @(nx * 750), @"y": @(ny * 1334),
                             @"touch": @1, @"delayMs": @16 }];
+    (void)range;
 }
 
 #pragma mark - 悬浮球 UI
