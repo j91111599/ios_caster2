@@ -53,6 +53,8 @@ YKSpringTouch_FILES = YKTouchSpring/YKSBProbe.m
 YKSpringTouch_CFLAGS = -fobjc-arc -Wno-nullability-completeness -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable
 YKSpringTouch_FRAMEWORKS = UIKit Foundation CoreFoundation
 YKSpringTouch_LDFLAGS = -fuse-ld=lld
+YKSpringTouch_LIBRARIES = substrate
+YKSpringTouch_CFLAGS += -I$(THEOS)/vendor/include
 YKSpringTouch_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
 
 include $(THEOS_MAKE_PATH)/tweak.mk
