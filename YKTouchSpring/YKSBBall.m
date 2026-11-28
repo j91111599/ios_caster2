@@ -183,7 +183,7 @@ static void YKBallHIDCallback(void *target, void *refcon, void *service, void *e
     }
     // 合成事件（我们自己的注入器）range/touch 标志不可靠，统一按「按住移动」记录，
     // 收尾的抬起点在 finish 里补一个，回放时按拖动轨迹注入。
-    if (nx <= 1.0 && ny <= 1.0) return;   // 无坐标的噪声帧丢弃
+    if (nx == 0 && ny == 0) return;   // 无坐标的噪声帧丢弃
     [rec.steps addObject:@{ @"x": @(nx * 750), @"y": @(ny * 1334),
                             @"touch": @1, @"delayMs": @16 }];
     (void)range;
