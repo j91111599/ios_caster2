@@ -37,12 +37,15 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
 - (UIView *)ykIconBox:(CGRect)r symbol:(NSString *)n tint:(UIColor *)tint glyph:(CGFloat)g;
 - (UIView *)ykCardHeader:(UIView *)card title:(NSString *)t symbol:(NSString *)n tint:(UIColor *)tint;
 - (void)ykTab:(UIButton *)sender;
+- (void)ykSelectTab:(NSInteger)idx;
 - (void)ykShowPageObj:(id)o;
 - (void)ykReloadScripts;
 @end
 
 @implementation YKMainView {
     CGFloat _W, _H;
+    NSMutableArray *_tabIcons;
+    NSMutableArray *_tabLabels;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -134,7 +137,7 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     // ---------- 卡片一：连接设备 ----------
     UIView *c1 = [self ykCard:CGRectMake(CARD_X, 20, CARD_W, 324)];
     [_devScroll addSubview:c1];
-    [self ykCardHeader:c1 title:@"连接设备" symbol:@"dot.radiowaves.left.and.right" tint:YkBlue()];
+    [self ykCardHeader:c1 title:@"连接设备" symbol:@"antenna.radiowaves.left.and.right" tint:YkBlue()];
 
     UIButton *scan = [UIButton buttonWithType:UIButtonTypeSystem];
     scan.frame = CGRectMake(CARD_W - INNER_PAD - 96, 20, 96, 36);
@@ -174,7 +177,9 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
         tt.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 17 : 15, 160, 22);
         [row addSubview:tt];
         UILabel *ss = [self ykLabel:r[1] size:12 bold:NO color:YkSub()];
-        ss.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 40 : 38, 170, 16);
+        ss.frame = CGRectMake(68, ([r[3] intValue] < 0) ? 40 : 38, 196, 16);
+        ss.adjustsFontSizeToFitWidth = YES;
+        ss.minimumScaleFactor = 0.8;
         [row addSubview:ss];
 
         if ([r[3] intValue] >= 0) {
@@ -406,7 +411,7 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     [self addSubview:_bottomBar];
 
     UIView *pill = [[UIView alloc] initWithFrame:CGRectMake(22, 0, _W - 44, 60)];
-    pill.backgroundColor = [UIColor colorWithWhite:0.99 alpha:0.96];
+    pill.backgroundColor = [UIColor colorWithWhite:0.99 alpha:0.94];
     pill.layer.cornerRadius = 30.0;
     pill.layer.shadowColor = [UIColor blackColor].CGColor;
     pill.layer.shadowOpacity = 0.06;
@@ -414,21 +419,42 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     pill.layer.shadowOffset = CGSizeMake(0, 2);
     [_bottomBar addSubview:pill];
 
+    _tabIcons = [NSMutableArray array];
+    _tabLabels = [NSMutableArray array];
+
     NSArray *names = @[@"设备", @"脚本", @"录制"];
     NSArray *icons = @[@"iphone", @"terminal", @"record.circle"];
+    CGFloat iw = pill.bounds.size.width / 3.0;
     for (NSInteger i = 0; i < 3; i++) {
-        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
-        b.frame = CGRectMake(i * (pill.bounds.size.width / 3.0), 4, pill.bounds.size.width / 3.0, 52);
-        b.tag = i;
-        [b setTitle:names[i] forState:UIControlStateNormal];
-        [b setImage:[UIImage systemImageNamed:icons[i]] forState:UIControlStateNormal];
-        b.titleLabel.font = [UIFont systemFontOfSize:12];
-        b.tintColor = (i == 0) ? YkTint() : YkSub();
-        b.contentEdgeInsets = UIEdgeInsetsMake(0, 0, 0, 0);
-        [b setTitleEdgeInsets:UIEdgeInsetsMake(26, -22, 0, 0)];
-        [b setImageEdgeInsets:UIEdgeInsetsMake(-14, 0, 0, 0)];
-        [b addTarget:self action:@selector(ykTab:) forControlEvents:UIControlEventTouchUpInside];
-        [pill addSubview:b];
+        UIButton *hit = [UIButton buttonWithType:UIButtonTypeCustom];
+        hit.frame = CGRectMake(i * iw, 0, iw, 60);
+        hit.tag = i;
+        [hit addTarget:self action:@selector(ykTab:) forControlEvents:UIControlEventTouchUpInside];
+        [pill addSubview:hit];
+
+        UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(i * iw, 7, iw, 28)];
+        iv.image = [UIImage systemImageNamed:icons[i]];
+        iv.contentMode = UIViewContentModeScaleAspectFit;
+        iv.userInteractionEnabled = NO;
+        [pill addSubview:iv];
+        [_tabIcons addObject:iv];
+
+        UILabel *l = [self ykLabel:names[i] size:12 bold:NO color:YkSub()];
+        l.textAlignment = NSTextAlignmentCenter;
+        l.frame = CGRectMake(i * iw, 36, iw, 18);
+        l.userInteractionEnabled = NO;
+        [pill addSubview:l];
+        [_tabLabels addObject:l];
+    }
+    [self ykSelectTab:0];
+}
+
+// 选中态：图标与文字同色（原版选中为蓝，未选中为灰）
+- (void)ykSelectTab:(NSInteger)idx {
+    for (NSInteger i = 0; i < _tabIcons.count; i++) {
+        UIColor *c = (i == idx) ? YkTint() : YkSub();
+        ((UIImageView *)_tabIcons[i]).tintColor = c;
+        ((UILabel *)_tabLabels[i]).textColor = c;
     }
 }
 
@@ -466,25 +492,11 @@ static UIColor *YkGreen(void)   { return [UIColor colorWithRed:0.20 green:0.72 b
     _scriptScroll.hidden = (i != 1);
     _recordScroll.hidden = (i != 2);
     if (i == 1) [self ykReloadScripts];
-    for (UIView *v in _bottomBar.subviews) {
-        for (UIView *b in v.subviews) {
-            if ([b isKindOfClass:[UIButton class]]) {
-                UIButton *btn = (UIButton *)b;
-                btn.tintColor = (btn.tag == i) ? YkTint() : YkSub();
-            }
-        }
-    }
+    [self ykSelectTab:i];
 }
 
 - (void)ykTab:(UIButton *)sender {
-    for (UIView *v in _bottomBar.subviews) {
-        for (UIView *b in v.subviews) {
-            if ([b isKindOfClass:[UIButton class]]) {
-                UIButton *btn = (UIButton *)b;
-                btn.tintColor = (btn.tag == sender.tag) ? YkTint() : YkSub();
-            }
-        }
-    }
+    [self ykSelectTab:sender.tag];
     _devScroll.hidden    = (sender.tag != 0);
     _scriptScroll.hidden = (sender.tag != 1);
     _recordScroll.hidden = (sender.tag != 2);
